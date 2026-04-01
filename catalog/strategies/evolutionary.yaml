@@ -1,0 +1,37 @@
+id: "evolutionary"
+name: "Evolutionary Search"
+layer: strategy
+description: |
+  Evolutionary search maintains a population of candidates instead of a single incumbent, which helps preserve diversity while still selecting for fitness. New candidates are produced through mutation, recombination, or crossover, then filtered by an evaluator. This makes the strategy more robust to rugged search spaces where progress requires combining useful partial solutions rather than following one local gradient. It is especially strong when the representation can be mutated in many plausible ways and parallel evaluation is available.
+when_to_use: |
+  - Use when maintaining diverse solution families is valuable and premature convergence is a real risk.
+  - Use when promising ideas can be combined through crossover or recomposed from partial building blocks.
+  - Use when the search space is large, discontinuous, or poorly suited to single-step greedy edits.
+  - Use when you can evaluate several candidates in parallel and benefit from broader frontier coverage.
+when_not_to_use: |
+  - Avoid when the evaluation budget is tiny and you cannot afford population maintenance overhead.
+  - Avoid when candidate representations do not mutate cleanly or crossover usually produces invalid outputs.
+  - Avoid when the objective is simple enough that a one-path greedy loop already converges quickly.
+  - Avoid when traceability matters more than exploration and you need an obvious causal story for each change.
+core_pattern: |
+  1. Initialize a population of candidates and score each one with the evaluator.
+  2. Select parents using a fitness-aware rule such as tournament selection, rank selection, or elitism.
+  3. Produce offspring by mutating candidates, crossing over parents, or both.
+  4. Evaluate all offspring and merge them with survivors from the previous generation.
+  5. Keep the fittest candidates while preserving enough diversity to avoid collapse.
+  6. Repeat for multiple generations until the population stops improving or the budget ends.
+source: "AlphaEvolve/DeepMind"
+tags: ["population", "mutation", "crossover", "diversity"]
+related: ["multi-armed-bandit", "beam-search"]
+examples:
+  - domain: "Algorithm discovery"
+    description: "Maintain a pool of program candidates, mutate implementation details, and recombine promising subroutines to discover better algorithms."
+    metric: "benchmark score"
+    result: "Found higher-performing program variants than a single-seed local search could reach."
+  - domain: "Architecture search"
+    description: "Evolve model blocks and connectivity patterns across generations while selecting for accuracy and efficiency."
+    metric: "accuracy-per-cost"
+    result: "Produced diverse candidate architectures and improved frontier quality over time."
+estimated_cost: "Medium to high; population evaluation dominates cost but parallel hardware can amortize the loop."
+experiments_per_hour: 6
+requires_gpu: false

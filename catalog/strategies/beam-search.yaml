@@ -1,0 +1,37 @@
+id: "beam-search"
+name: "Beam Search"
+layer: strategy
+description: |
+  Beam search keeps the top-k candidates alive at each step rather than committing to a single best path. Each surviving candidate is expanded into multiple next-step variants, and the combined pool is pruned back down to the best k options. This gives a practical middle ground between greedy search and full combinatorial branching, preserving some diversity without letting costs explode. It works well when improvements are sequential and intermediate partial solutions can be scored meaningfully.
+when_to_use: |
+  - Use when you want broader exploration than hill climbing but still need strict control over branching cost.
+  - Use when partial candidates can be scored well enough to justify keeping only the top frontier.
+  - Use when multiple promising directions may exist and pruning too early would lose useful alternatives.
+  - Use when parallel evaluation is available and you can expand several frontier states at once.
+when_not_to_use: |
+  - Avoid when intermediate scoring is weak, misleading, or only becomes meaningful at the final completed artifact.
+  - Avoid when the beam width needed for adequate coverage would exceed your evaluation budget.
+  - Avoid when candidate diversity matters more than strict top-k pruning, since beams can collapse to similar variants.
+  - Avoid when the problem is better framed as continuous parameter optimization rather than sequential expansion.
+core_pattern: |
+  1. Start with an initial beam containing one or more seed candidates.
+  2. Expand each beam candidate into a set of next-step variants.
+  3. Evaluate all expanded variants using the current scoring function.
+  4. Rank the combined pool and keep only the top-k candidates.
+  5. Repeat expansion and pruning until the stopping depth, budget, or quality threshold is reached.
+  6. Return the highest-scoring final candidate or the full final beam for downstream selection.
+source: "classical search"
+tags: ["parallel", "top-k", "breadth-depth"]
+related: ["evolutionary", "multi-armed-bandit"]
+examples:
+  - domain: "Prompt variant exploration"
+    description: "Keep the best prompt drafts at each editing round, expand each with multiple wording variants, and prune to the strongest beam."
+    metric: "eval score"
+    result: "Explored multiple stylistic directions without paying for a full combinatorial search tree."
+  - domain: "Architecture search"
+    description: "Expand promising partial architectures layer by layer while preserving a small frontier of top candidates."
+    metric: "validation accuracy"
+    result: "Balanced search breadth and depth under a fixed parallel evaluation budget."
+estimated_cost: "Medium to high; cost scales with beam width and branching factor but parallel execution helps."
+experiments_per_hour: 4
+requires_gpu: false

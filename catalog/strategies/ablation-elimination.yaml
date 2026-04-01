@@ -1,0 +1,37 @@
+id: "ablation-elimination"
+name: "Ablation Elimination"
+layer: strategy
+description: |
+  Ablation elimination improves systems by removing or disabling components to determine which parts actually contribute to performance. Rather than searching by adding novelty, it uses subtraction to identify essential ingredients, redundant complexity, and misleading cargo-cult features. This makes it useful both as an optimization method and as a diagnostic lens for understanding why a system works. It is especially helpful when a prompt, pipeline, or model setup has grown organically and nobody is sure what still matters.
+when_to_use: |
+  - Use when the current system has many components and you need to know which ones drive the metric.
+  - Use when simplification, interpretability, or cost reduction is a goal in addition to raw performance.
+  - Use when you suspect the pipeline contains redundant instructions, features, or processing steps.
+  - Use when you want causal insight into component importance before investing in more elaborate search.
+when_not_to_use: |
+  - Avoid when the system is still too immature to have stable components worth isolating.
+  - Avoid when performance depends heavily on interactions between components and single removals are misleading.
+  - Avoid when the search objective is discovering new capabilities rather than understanding existing ones.
+  - Avoid when the evaluation budget cannot support multiple controlled removal experiments.
+core_pattern: |
+  1. Start from a strong baseline that contains all current components.
+  2. Enumerate candidate removals, disables, or substitutions for one component at a time.
+  3. Run controlled evaluations for each ablated variant while holding everything else constant.
+  4. Compare score deltas, cost changes, and behavioral differences against the baseline.
+  5. Permanently remove components that do not help enough to justify their complexity or cost.
+  6. Repeat with deeper or grouped ablations to refine the minimal effective configuration.
+source: "scientific method / ML ablations"
+tags: ["subtractive", "diagnostic", "component-analysis"]
+related: ["beam-search", "self-refine"]
+examples:
+  - domain: "Feature importance"
+    description: "Disable engineered features one by one to identify which inputs meaningfully affect downstream quality."
+    metric: "validation score"
+    result: "Revealed the small subset of features worth keeping in production."
+  - domain: "Prompt component analysis"
+    description: "Remove examples, chain-of-thought scaffolds, constraints, or output formatting sections to see what actually matters."
+    metric: "task success rate"
+    result: "Simplified prompts while preserving most of the original performance."
+estimated_cost: "Low to medium; each run is simple, but thorough coverage can require many controlled comparisons."
+experiments_per_hour: 10
+requires_gpu: false

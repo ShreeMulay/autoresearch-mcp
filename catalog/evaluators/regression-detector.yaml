@@ -1,0 +1,43 @@
+id: regression-detector
+name: Regression Detector
+layer: evaluator
+description: |
+  Regression Detector watches secondary metrics so that improvements in one area do not hide damage elsewhere.
+  It is the defensive complement to optimization and ratcheting systems.
+  Instead of asking whether the main score went up, it asks whether anything important got worse on the way.
+  This is essential for maintaining overall system health in multi-metric environments.
+when_to_use: |
+  - Use when optimizing a primary metric could create harmful side effects in other metrics.
+  - Use when system health depends on multiple dimensions such as quality, speed, cost, and length.
+  - Use when you need guardrails to preserve behavior while pushing for incremental gains.
+  - Use when silent regressions would be expensive to discover only after deployment.
+when_not_to_use: |
+  - Do not use when the task is exploratory and no stable baseline or guardrail metrics exist yet.
+  - Do not use when secondary metrics are noisy enough that alerts would mostly be false positives.
+  - Do not use as a substitute for measuring the primary objective directly.
+  - Do not use when no action will be taken on detected regressions.
+core_pattern: |
+  1. Identify the secondary metrics that must not degrade.
+  2. Establish baseline values and acceptable tolerance bands for each metric.
+  3. Run the primary evaluation and secondary measurements on every candidate.
+  4. Compare the new results against the baseline or incumbent.
+  5. Flag or reject candidates that improve the main metric while violating a guardrail.
+  6. Log regression events so patterns can inform future optimization strategy.
+source: Model monitoring and regression testing practice
+tags: [defensive, multi-metric, guardrail, monitoring]
+related: [benchmark-harness, cost-latency-evaluator]
+examples:
+  - domain: model-optimization
+    description: Catch a model that gains accuracy but triples inference latency.
+    metric: latency regression flag
+    result: triggered
+  - domain: text-generation
+    description: Catch a prompt whose score rises while output length grows far beyond budget.
+    metric: length guardrail status
+    result: violated
+  - domain: support-automation
+    description: Catch a response policy update that improves helpfulness but lowers compliance.
+    metric: compliance delta
+    result: -0.07
+estimated_cost: ~$0
+requires_gpu: false

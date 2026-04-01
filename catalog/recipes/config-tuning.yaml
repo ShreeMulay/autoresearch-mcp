@@ -1,0 +1,47 @@
+id: config-tuning
+name: Config Tuning
+layer: recipe
+description: |
+  Config Tuning searches for better parameter settings by treating configuration as
+  the primary optimization surface and evaluating each trial with a benchmark harness.
+  Bayesian optimization is a strong fit because it uses prior observations to pick
+  promising next trials rather than wandering blindly. The recipe works well for
+  infrastructure, database, and model settings where the code stays fixed but behavior
+  changes materially with configuration. It is a practical way to improve systems that
+  already have clear knobs and measurable outcomes.
+when_to_use: |
+  - The system exposes meaningful numeric or categorical parameters to tune.
+  - A benchmark harness can score each configuration repeatably.
+  - Trial cost is non-trivial, so smarter search beats pure random exploration.
+  - You want to improve performance without changing application code.
+when_not_to_use: |
+  - The real problem requires code redesign, architectural change, or data cleanup.
+  - Parameter effects are mostly qualitative and cannot be measured well.
+  - The search space is tiny enough that manual sweeps are simpler.
+  - Configuration changes are risky to apply or hard to isolate in evaluation.
+core_pattern: |
+  1. Define the tunable config parameters, valid ranges, benchmark harness, and objective metric.
+  2. Run baseline measurements for the current configuration.
+  3. Use Bayesian optimization to propose the next configuration based on prior results.
+  4. Apply the candidate config and run the benchmark harness under consistent conditions.
+  5. Keep the improved configuration as the new baseline when it wins on the target metric and respects guardrails.
+  6. Update the search history with the observed result and continue until convergence, budget exhaustion, or diminishing returns.
+source: Composed recipe from autoresearch patterns
+tags: [config, hyperparameter, infrastructure]
+related: [ml-training, general-ratchet, single-ratchet]
+composes:
+  search_strategy: bayesian-optimization
+  evaluator: benchmark-harness
+  execution_pattern: single-ratchet
+examples:
+  - domain: databases
+    description: Tune connection pool sizes, cache thresholds, and timeout settings for API throughput.
+    metric: Requests per second at fixed error-rate and latency guardrails.
+    result: The search surfaces a better throughput configuration than manual defaults.
+  - domain: model serving
+    description: Optimize batch size and concurrency settings for an inference endpoint.
+    metric: Tokens per second with p95 latency constraints.
+    result: A new serving profile improves throughput without breaching latency targets.
+estimated_cost: $0.02-$0.10 per experiment
+experiments_per_hour: 12
+requires_gpu: false

@@ -1,0 +1,46 @@
+id: code-performance
+name: Code Performance
+layer: recipe
+description: |
+  Code Performance optimizes code against measurable benchmark outcomes such as speed,
+  binary size, memory use, or throughput while holding correctness fixed. The recipe
+  isolates candidate changes in separate branches, runs the same benchmark harness,
+  and merges only winning experiments. This creates a disciplined workflow for code
+  optimization without sacrificing reproducibility or rollback safety. It is especially
+  effective when several optimization hypotheses can be explored in parallel.
+when_to_use: |
+  - You have an executable benchmark harness with correctness checks.
+  - Performance improvements can be compared objectively across candidate branches.
+  - Multiple optimization ideas are worth testing in parallel.
+  - Git history and branch isolation are important to the team workflow.
+when_not_to_use: |
+  - The main issue is missing features or correctness bugs rather than performance.
+  - You lack a trustworthy benchmark harness, so wins cannot be validated.
+  - The codebase or deployment process makes many short-lived branches expensive to manage.
+  - Benchmarks are dominated by noisy external systems that obscure code-level improvements.
+core_pattern: |
+  1. Define the benchmark harness, correctness gates, and the base branch baseline.
+  2. Use hill climbing or targeted edits to generate several code optimization candidates.
+  3. Create one branch per candidate so experiments remain isolated and reproducible.
+  4. Run the benchmark harness and correctness suite on each branch under comparable conditions.
+  5. Compare candidates to the base branch on the primary metric and regression guardrails.
+  6. Merge the winning branch, delete or archive the losers, and repeat from the new baseline.
+source: Composed recipe from autoresearch patterns
+tags: [code, benchmark, performance]
+related: [champion-challenger, branch-and-merge, general-ratchet]
+composes:
+  search_strategy: hill-climbing
+  evaluator: benchmark-harness
+  execution_pattern: branch-and-merge
+examples:
+  - domain: test infrastructure
+    description: Speed up an integration test suite by reducing setup overhead and fixture churn.
+    metric: Median end-to-end runtime with all tests still passing.
+    result: Parallel branch experiments identify a faster fixture-loading strategy with no correctness loss.
+  - domain: frontend build pipeline
+    description: Reduce production bundle size through dependency pruning and code splitting.
+    metric: Gzipped bundle size plus Lighthouse guardrails.
+    result: The winning branch ships a smaller bundle without regressing startup behavior.
+estimated_cost: $0.05-$0.15 per experiment
+experiments_per_hour: 9
+requires_gpu: false

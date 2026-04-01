@@ -1,0 +1,35 @@
+id: single-ratchet
+name: Single Ratchet
+layer: pattern
+description: |
+  Single Ratchet is the simplest autoresearch execution loop: change one artifact,
+  run one evaluator, and only keep the edit if the target metric improves. It is
+  greedy, sequential, and intentionally narrow so attribution stays clean. The
+  pattern works best when the system under optimization has a single dominant file
+  or prompt and a stable, repeatable measurement pipeline.
+when_to_use: |
+  - You have one primary artifact to edit, such as a prompt, config file, or model source file.
+  - The evaluator returns a stable numeric metric that can be compared across runs.
+  - You want the fastest possible optimization loop with minimal orchestration overhead.
+  - You need clear causal attribution between one change and one metric movement.
+when_not_to_use: |
+  - Improvements require coordinated edits across many files or systems at once.
+  - The metric is noisy enough that single-run comparisons produce misleading decisions.
+  - You need to explore multiple alternatives in parallel rather than sequentially.
+  - The work requires long-running jobs that must survive interruptions without checkpoints.
+core_pattern: |
+  1. Pick the current target artifact and establish the baseline metric.
+  2. Generate or hand-author one candidate edit in a single direction of change.
+  3. Run the evaluator on the edited artifact using the same harness and inputs.
+  4. Compare the new score to the baseline using the primary metric and any guardrails.
+  5. Keep the edit only if it improves the score without violating constraints; otherwise discard it.
+  6. Record the outcome, promote the kept version to the new baseline, and repeat.
+source: karpathy/autoresearch
+tags: [simple, greedy, sequential, one-file]
+related: [two-loop, branch-and-merge]
+examples:
+  - domain: prompt engineering
+    description: Improve a system prompt one revision at a time against an LLM judge score.
+  - domain: model training
+    description: Modify a single training script parameterization and keep only validation-loss improvements.
+estimated_cost: Low orchestration cost; dominated by repeated evaluator runs.

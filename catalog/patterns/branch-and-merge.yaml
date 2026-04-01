@@ -1,0 +1,35 @@
+id: branch-and-merge
+name: Branch and Merge
+layer: pattern
+description: |
+  Branch and Merge manages experiments as isolated git branches so multiple ideas can
+  be explored independently and compared against a stable base. Each branch contains
+  a self-contained candidate, benchmark evidence, and merge decision. The pattern is
+  ideal when parallel experimentation matters and git history should remain the source
+  of truth for what was tried.
+when_to_use: |
+  - You want to run multiple experiments in parallel without edit collisions.
+  - The optimized artifact lives in version control and benefits from isolated histories.
+  - You need clean comparison points and reversible merge decisions for candidates.
+  - Different agents or contributors will test separate ideas at the same time.
+when_not_to_use: |
+  - The work is not stored in git or cannot be represented cleanly as branches.
+  - Experiment turnaround is so fast that branch management overhead outweighs benefits.
+  - The evaluator depends on mutable external state that branches cannot isolate.
+  - Team process cannot tolerate many short-lived experiment branches.
+core_pattern: |
+  1. Establish a stable base branch and baseline benchmark results.
+  2. Create one experiment branch per candidate idea, hypothesis, or generator output.
+  3. Apply the candidate changes independently in each branch.
+  4. Run the same evaluation harness on every branch and capture comparable results.
+  5. Promote a branch by merging it only if it beats the base on required metrics.
+  6. Delete or archive losing branches, then start the next set of candidates from the new base.
+source: Git-native experimentation pattern
+tags: [git-native, parallel, branching, merge]
+related: [champion-challenger, single-ratchet]
+examples:
+  - domain: application performance
+    description: Test several bundle-size reduction ideas on separate branches and merge only the best verified candidate.
+  - domain: test reliability
+    description: Generate multiple alternative test suites in parallel branches and retain the one with the best coverage-to-flakiness tradeoff.
+estimated_cost: Moderate orchestration cost; efficient when parallel experiments shorten wall-clock time.

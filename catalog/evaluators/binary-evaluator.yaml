@@ -1,0 +1,43 @@
+id: binary-evaluator
+name: Binary Evaluator
+layer: evaluator
+description: |
+  Binary Evaluator checks whether required conditions are satisfied and scores each one as pass or fail.
+  The final score is the number of passed criteria divided by the total number of criteria.
+  It is ideal for fast gatekeeping because the rules are explicit, cheap to run, and easy to explain.
+  This pattern works best for structural validity, formatting rules, and minimum acceptance thresholds.
+when_to_use: |
+  - Use when you need a fast gate to reject obviously invalid outputs before more expensive evaluation.
+  - Use when the criteria can be expressed as clear yes-or-no checks.
+  - Use when explainability matters and you want to show exactly which rules failed.
+  - Use when structural validity is more important than nuanced quality differences.
+when_not_to_use: |
+  - Do not use when output quality varies on a spectrum and simple pass/fail loses too much signal.
+  - Do not use when the criteria are ambiguous enough that a binary check becomes brittle.
+  - Do not use as the sole evaluator for creative, strategic, or user-preference tasks.
+  - Do not use when partial credit across dimensions is important to optimization.
+core_pattern: |
+  1. Define a checklist of required criteria.
+  2. Run each criterion as a deterministic pass/fail check.
+  3. Assign 1.0 for pass and 0.0 for fail on every criterion.
+  4. Aggregate the result as passed_checks / total_checks.
+  5. Record the failing criteria so the system knows what to fix.
+  6. Optionally use the aggregate as a hard gate before deeper evaluation.
+source: Common QA gatekeeping pattern
+tags: [pass-fail, structural, fast, cheap]
+related: [benchmark-harness, rubric-scorer]
+examples:
+  - domain: document-generation
+    description: Check whether the output includes required sections such as summary, risks, and next steps.
+    metric: required sections passed / total
+    result: 0.75
+  - domain: data-processing
+    description: Validate that a response is parseable JSON and matches the expected schema.
+    metric: validity checks passed / total
+    result: 1.0
+  - domain: code-generation
+    description: Verify that generated code compiles successfully with no syntax errors.
+    metric: compile gate
+    result: 0.0
+estimated_cost: ~$0
+requires_gpu: false

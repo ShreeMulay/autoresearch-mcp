@@ -1,0 +1,37 @@
+id: "simulated-annealing"
+name: "Simulated Annealing"
+layer: strategy
+description: |
+  Simulated annealing extends hill climbing by sometimes accepting worse moves, especially early in the search. The acceptance probability is governed by a temperature schedule that starts exploratory and gradually becomes more selective. This helps the system escape local optima that would trap a purely greedy loop. It is a good fit for rugged objective landscapes where the best solution may require traversing a temporary dip in quality.
+when_to_use: |
+  - Use when greedy local search improves quickly at first but plateaus in obviously suboptimal regions.
+  - Use when the search landscape is rugged and occasional downhill moves can unlock better basins later.
+  - Use when you still want a single-path optimization loop without population-management overhead.
+  - Use when you can define a temperature schedule that matches the budget and search aggressiveness you want.
+when_not_to_use: |
+  - Avoid when the evaluator is so noisy that accepting worse moves becomes indistinguishable from measurement error.
+  - Avoid when the problem is simple enough that plain hill climbing already converges well.
+  - Avoid when you need deterministic reproducibility from run to run, since probabilistic acceptance adds variance.
+  - Avoid when candidate generation is expensive and random detours would consume too much budget.
+core_pattern: |
+  1. Start from an initial candidate, score it, and set an initial temperature.
+  2. Propose a local modification to produce a neighboring candidate.
+  3. Evaluate the neighbor and compute the score difference relative to the current candidate.
+  4. Always accept improvements; otherwise accept regressions with probability determined by the current temperature.
+  5. Lower the temperature according to the annealing schedule.
+  6. Repeat until the temperature floor, patience limit, or experiment budget is reached.
+source: "classical optimization"
+tags: ["temperature", "escape-local-optima", "probabilistic"]
+related: ["hill-climbing", "evolutionary"]
+examples:
+  - domain: "Complex optimization landscapes"
+    description: "Search over prompts, heuristics, or configurations where local edits often need a temporary quality drop before improving later."
+    metric: "objective score"
+    result: "Escaped early plateaus that trapped purely greedy optimization."
+  - domain: "NP-hard problems"
+    description: "Optimize combinatorial structures such as schedules or assignments using local moves plus temperature-based acceptance."
+    metric: "cost function"
+    result: "Found better feasible solutions than strict local search under the same budget."
+estimated_cost: "Low to medium; similar execution cost to hill climbing with modest overhead for stochastic control."
+experiments_per_hour: 11
+requires_gpu: false

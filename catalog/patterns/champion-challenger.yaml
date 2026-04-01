@@ -1,0 +1,35 @@
+id: champion-challenger
+name: Champion Challenger
+layer: pattern
+description: |
+  Champion Challenger maintains a current best solution as the champion and evaluates
+  every new candidate as a challenger against it. Promotion requires beating the
+  champion on the primary metric while avoiding unacceptable regressions on secondary
+  metrics. This pattern is widely used in A/B testing, model selection, and controlled
+  optimization where stability matters as much as improvement.
+when_to_use: |
+  - You already have a known good baseline that should remain deployable at all times.
+  - Improvements must clear a defined threshold on a primary metric before promotion.
+  - Secondary metrics such as latency, cost, or safety must stay within guardrails.
+  - You want a disciplined promotion policy instead of ad hoc replacement of the current best.
+when_not_to_use: |
+  - There is no stable baseline yet, so every candidate is effectively greenfield.
+  - Metrics are too noisy to support meaningful pairwise comparisons without extensive replication.
+  - You need broad exploratory search rather than gatekeeping against one incumbent.
+  - Secondary constraints are undefined, making promotion decisions ambiguous.
+core_pattern: |
+  1. Define the current champion and capture its scores on the primary and secondary metrics.
+  2. Generate one or more challengers using the chosen search strategy.
+  3. Evaluate each challenger with the same harness, dataset, and comparison protocol used for the champion.
+  4. Compare challengers against the champion on the primary metric first, then check all secondary guardrails.
+  5. Promote the best challenger only if it clearly wins without unacceptable regressions.
+  6. Keep the incumbent as champion when no challenger satisfies the promotion criteria.
+source: Standard A/B experimentation pattern
+tags: [A-B, champion, challenger, statistical]
+related: [branch-and-merge, pairwise-comparison]
+examples:
+  - domain: ranking prompts
+    description: Compare a new summarization prompt against the production prompt and promote it only if quality rises without added latency.
+  - domain: evaluator selection
+    description: Test a new scoring pipeline against the current benchmark harness while holding correctness and runtime guardrails constant.
+estimated_cost: Moderate; comparison quality improves with repeated or statistically grounded evaluations.

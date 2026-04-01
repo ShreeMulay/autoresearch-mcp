@@ -1,0 +1,7 @@
+iteration	score	improved	change_description
+0	66.0	-	Baseline: simple one-line prompt
+1	76.0	yes	Added code formatting instruction (markdown code blocks with syntax highlighting)
+2	96.0	yes	Added edge cases, pitfalls, and best practices instruction
+3	96.0	no	Added practical/real-world examples emphasis (reverted)
+4	96.0	no	Added comprehensive/thorough instruction (reverted)
+5	96.0	no	Restructured into multi-section format with headers (no score change, kept for readability)

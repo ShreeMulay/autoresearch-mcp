@@ -1,0 +1,46 @@
+id: literature-synthesis
+name: Literature Synthesis
+layer: recipe
+description: |
+  Literature Synthesis collects evidence from multiple sources, extracts structured
+  findings, and iteratively improves the synthesis strategy against a research rubric.
+  A self-refine search loop helps the system critique and improve its own synthesis
+  outputs, while the outer loop tunes the shared extraction and summarization approach
+  across a corpus. This recipe is valuable for evidence reviews, competitive analyses,
+  and any workflow where structured understanding matters more than raw generation speed.
+when_to_use: |
+  - You need to synthesize many documents, papers, reports, or web sources into structured knowledge.
+  - Quality can be judged with a rubric for completeness, traceability, and faithfulness.
+  - A shared extraction framework should improve across the whole corpus.
+  - Thoroughness and evidence structure matter more than maximum throughput.
+when_not_to_use: |
+  - The task is simple summarization of a single document rather than multi-source synthesis.
+  - Source materials are too sparse or low quality to support reliable structured conclusions.
+  - You do not have a rubric or review process to assess synthesis quality.
+  - Budget constraints make repeated corpus-level refinement unrealistic.
+core_pattern: |
+  1. Define the source corpus, extraction schema, synthesis rubric, and aggregate success metric.
+  2. Start with a shared synthesis strategy covering retrieval, extraction, citation, and summarization behavior.
+  3. Run self-refine within each item or source cluster to improve local extractions and draft syntheses.
+  4. Score outputs with the rubric scorer for faithfulness, completeness, and structure.
+  5. Aggregate failures across the corpus and revise the shared synthesis strategy in the outer loop.
+  6. Repeat until the corpus-level synthesis quality stabilizes or the review budget is reached.
+source: Composed recipe from autoresearch patterns
+tags: [research, literature, synthesis, knowledge]
+related: [content-revision, two-loop, prompt-optimization]
+composes:
+  search_strategy: self-refine
+  evaluator: rubric-scorer
+  execution_pattern: two-loop
+examples:
+  - domain: clinical research
+    description: Build a structured evidence review from nephrology studies.
+    metric: Rubric score for evidence coverage, citation fidelity, and recommendation clarity.
+    result: Iterative synthesis improves consistency and reduces omitted findings across papers.
+  - domain: market intelligence
+    description: Synthesize competitor positioning from websites, docs, and public announcements.
+    metric: Rubric score for completeness, structure, and factual grounding.
+    result: The resulting brief becomes easier to compare and update over time.
+estimated_cost: $0.20-$0.50 per experiment
+experiments_per_hour: 3
+requires_gpu: false

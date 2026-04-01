@@ -1,0 +1,43 @@
+id: llm-as-judge
+name: LLM as Judge
+layer: evaluator
+description: |
+  LLM as Judge uses a frontier language model to evaluate an output against a prompt or rubric.
+  It is the most flexible evaluator because it can handle messy, open-ended quality questions that are hard to encode directly.
+  The tradeoff is that the judge can drift over time, exhibit bias, or be swayed by prompt wording.
+  It is powerful for broad quality assessment, but it should be calibrated carefully and monitored for consistency.
+when_to_use: |
+  - Use when you need to evaluate writing, reasoning, creativity, or other qualities without a clean benchmark.
+  - Use when fast iteration matters more than perfect objectivity.
+  - Use when a rubric can guide the judge but deterministic scoring is not possible.
+  - Use when you need a general-purpose evaluator that can span many domains.
+when_not_to_use: |
+  - Do not use when an objective benchmark or deterministic script is available.
+  - Do not use when the stakes are high enough that unreviewed judge bias is unacceptable.
+  - Do not use without calibration if prompt drift or model changes could distort trend lines.
+  - Do not use as the only evaluator when the system is vulnerable to evaluator gaming.
+core_pattern: |
+  1. Write a judging prompt that defines the task, rubric, and scoring scale.
+  2. Provide the candidate output and any needed reference context to the judge model.
+  3. Ask the judge to produce a score, verdict, or structured assessment.
+  4. Parse the response into a normalized numeric score.
+  5. Repeat or ensemble judges if reliability matters more than cost.
+  6. Track judge version and prompt version so score drift is detectable.
+source: LMSYS/MT-Bench
+tags: [flexible, subjective, LLM-powered, risk-of-bias]
+related: [rubric-scorer, pairwise-comparison]
+examples:
+  - domain: writing
+    description: Judge whether an essay is clear, persuasive, and well structured.
+    metric: judge quality score
+    result: 0.82
+  - domain: creative-generation
+    description: Evaluate whether a story ending feels satisfying and original.
+    metric: creative quality score
+    result: 0.76
+  - domain: general-assessment
+    description: Ask a judge model whether a response is broadly good enough for release.
+    metric: overall judge score
+    result: 0.81
+estimated_cost: $0.01-0.10 per eval
+requires_gpu: false

@@ -1,0 +1,43 @@
+id: human-approval-gate
+name: Human Approval Gate
+layer: evaluator
+description: |
+  Human Approval Gate sends the top candidates to a person for explicit review before the loop continues.
+  It is the safety valve for domains where a bad automated choice could cause outsized harm.
+  This slows iteration, but it adds accountability and contextual judgment that automation cannot fully replace.
+  It is especially valuable near deployment boundaries or in regulated, high-stakes workflows.
+when_to_use: |
+  - Use when the domain is high stakes, regulated, or safety sensitive.
+  - Use when automated evaluators are helpful but not trustworthy enough for final approval.
+  - Use when deployment, publication, or external action should require human signoff.
+  - Use when expert review can catch subtle harms that benchmarks miss.
+when_not_to_use: |
+  - Do not use in low-risk loops where full automation is the main advantage.
+  - Do not use when reviewer throughput would become the main bottleneck for experimentation.
+  - Do not use as a substitute for building better automated tests in routine domains.
+  - Do not use when the review process is so vague that approvals become inconsistent and uninformative.
+core_pattern: |
+  1. Rank or filter candidates using earlier automated evaluators.
+  2. Surface the top-N candidates with relevant context and comparison notes.
+  3. Ask a human reviewer to approve, reject, or request changes.
+  4. Record the decision and any reviewer rationale.
+  5. Allow only approved candidates to progress to the next stage.
+  6. Feed reviewer feedback back into future rubric, guardrail, or prompt improvements.
+source: Human-in-the-loop safety review workflow
+tags: [safety, manual, high-stakes, checkpoint]
+related: [pairwise-comparison, regression-detector]
+examples:
+  - domain: medical-content
+    description: Require clinician review before patient-facing educational material is published.
+    metric: human approval status
+    result: approved
+  - domain: finance
+    description: Require analyst review before executing a model-suggested financial action.
+    metric: reviewer verdict
+    result: rejected
+  - domain: devops
+    description: Require operator approval before promoting an automatically tuned system to production.
+    metric: deployment signoff
+    result: approved
+estimated_cost: human time
+requires_gpu: false

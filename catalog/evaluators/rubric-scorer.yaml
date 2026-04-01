@@ -1,0 +1,43 @@
+id: rubric-scorer
+name: Rubric Scorer
+layer: evaluator
+description: |
+  Rubric Scorer evaluates a candidate across several named quality dimensions and combines them with weights.
+  Each dimension is scored independently, which preserves structure while still allowing nuanced judgments.
+  This makes it more expressive than binary checks without becoming an unbounded free-form review.
+  It is especially useful when quality depends on multiple factors that must be balanced rather than optimized in isolation.
+when_to_use: |
+  - Use when quality depends on several dimensions such as accuracy, completeness, clarity, or efficiency.
+  - Use when you want consistent scoring criteria that can be reused across runs and judges.
+  - Use when stakeholders need interpretable sub-scores instead of a single opaque judgment.
+  - Use when binary checks are too coarse but a fully open-ended judge is too loose.
+when_not_to_use: |
+  - Do not use when a deterministic benchmark already captures the outcome well enough.
+  - Do not use when the dimensions or weights are politically contested and not yet stable.
+  - Do not use when the task is so subjective that dimension definitions become arbitrary.
+  - Do not use for ultra-high-throughput loops where even small LLM evaluation costs are too expensive.
+core_pattern: |
+  1. Define 3 to 10 evaluation dimensions with clear scoring anchors.
+  2. Assign a weight to each dimension based on its importance.
+  3. Present the candidate and rubric to the evaluator.
+  4. Score each dimension independently and capture brief justification.
+  5. Multiply each dimension score by its weight and sum the results.
+  6. Store both the final score and the per-dimension breakdown for analysis.
+source: Structured rubric-based evaluation practice
+tags: [multi-dimension, weighted, structured, nuanced]
+related: [llm-as-judge, binary-evaluator]
+examples:
+  - domain: content-quality
+    description: Score an article on accuracy, completeness, clarity, and citation quality.
+    metric: weighted rubric score
+    result: 0.84
+  - domain: code-review
+    description: Score generated code on readability, efficiency, correctness, and maintainability.
+    metric: weighted code quality score
+    result: 0.79
+  - domain: support-automation
+    description: Score responses on policy compliance, helpfulness, empathy, and concision.
+    metric: weighted response quality
+    result: 0.87
+estimated_cost: $0.01-0.05 per eval
+requires_gpu: false

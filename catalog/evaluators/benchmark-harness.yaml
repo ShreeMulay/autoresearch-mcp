@@ -1,0 +1,47 @@
+id: benchmark-harness
+name: Benchmark Harness
+layer: evaluator
+description: |
+  Benchmark Harness runs a deterministic script or test suite and treats the emitted number as the score.
+  It is the cleanest evaluator when quality can be tied to an objective metric such as pass rate, loss, or latency.
+  Because it avoids LLM judgment, it is cheap, stable across runs, and easy to automate in a ratchet loop.
+  This is the default gold standard whenever the domain supports measurable outcomes.
+when_to_use: |
+  - Use when you already have a reliable script, benchmark, or test harness that outputs a single numeric metric.
+  - Use when you need reproducible comparisons across many iterations without evaluator drift.
+  - Use when evaluation must be cheap enough to run continuously in CI, sweeps, or autonomous loops.
+  - Use when objective ground truth exists and subjective judging would only add noise.
+when_not_to_use: |
+  - Do not use when quality is primarily aesthetic, creative, or preference-based.
+  - Do not use when the task lacks a trustworthy benchmark or the metric is easy to game.
+  - Do not use when the harness produces unstable scores because of nondeterminism or flaky tests.
+  - Do not use as the only evaluator when secondary regressions matter but are not captured in the main metric.
+core_pattern: |
+  1. Define the exact script, command, or test suite that evaluates the candidate.
+  2. Run it in a controlled environment with fixed inputs, seeds, and dependencies.
+  3. Capture the single float score printed to stdout.
+  4. Normalize the score direction so higher-is-better is consistent across experiments.
+  5. Compare the result against the current best score, threshold, or baseline.
+  6. Persist the score and metadata for later regression analysis.
+source: Standard benchmarking practice
+tags: [deterministic, objective, scriptable, fast]
+related: [binary-evaluator, regression-detector]
+examples:
+  - domain: testing
+    description: Run pytest and convert the fraction of passing tests into the score.
+    metric: test pass rate
+    result: 0.96
+  - domain: web-performance
+    description: Run Lighthouse on a fixed page and use the performance score.
+    metric: Lighthouse performance
+    result: 0.91
+  - domain: language-model-training
+    description: Read validation bits-per-byte from the training script output.
+    metric: validation bpb
+    result: 1.34
+  - domain: inference-systems
+    description: Run a latency benchmark and invert normalized latency into a quality score.
+    metric: normalized latency score
+    result: 0.88
+estimated_cost: ~$0
+requires_gpu: false

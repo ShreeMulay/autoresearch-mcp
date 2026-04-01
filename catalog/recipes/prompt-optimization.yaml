@@ -1,0 +1,46 @@
+id: prompt-optimization
+name: Prompt Optimization
+layer: recipe
+description: |
+  Prompt Optimization iteratively improves prompts against a repeatable evaluation
+  target, usually quality judged by an LLM, rubric, or downstream task result. The
+  recipe works by proposing prompt edits, running the evaluator, and ratcheting only
+  the improvements into the next round. It is one of the most accessible autoresearch
+  workflows because the search space is cheap to modify and easy to version. It fits
+  both system prompts and structured few-shot example sets.
+when_to_use: |
+  - You have a stable prompt artifact and a repeatable eval set.
+  - Quality can be measured with an LLM judge, pairwise comparison, or downstream task score.
+  - Fast iteration matters more than broad parallel exploration.
+  - You want a practical first recipe for autoresearch in LLM-heavy workflows.
+when_not_to_use: |
+  - The real bottleneck is model choice, retrieval quality, or tool reliability rather than prompt wording.
+  - Your evaluator is too subjective or inconsistent to support ratcheting.
+  - Prompt behavior depends on many external systems that make attribution unclear.
+  - You need coordinated multi-file code changes instead of prompt-only edits.
+core_pattern: |
+  1. Select the prompt file, eval dataset, primary score, and acceptance guardrails.
+  2. Run the baseline prompt through the evaluator to establish the starting score.
+  3. Use hill climbing to generate a focused prompt revision or example-set change.
+  4. Score the candidate with an LLM-as-judge evaluator on the same eval slice.
+  5. Keep the revision only if it improves the target score without violating cost or safety constraints.
+  6. Log the result, promote the better prompt, and repeat until progress plateaus or budget is exhausted.
+source: Composed recipe from autoresearch patterns
+tags: [prompts, LLM, iterative]
+related: [general-ratchet, content-revision, single-ratchet]
+composes:
+  search_strategy: hill-climbing
+  evaluator: llm-as-judge
+  execution_pattern: single-ratchet
+examples:
+  - domain: support automation
+    description: Improve a customer-support system prompt for helpfulness and policy compliance.
+    metric: Average LLM judge score across a held-out conversation set.
+    result: Cleaner instructions and example choices raise quality without increasing refusal errors.
+  - domain: extraction
+    description: Refine few-shot examples for structured invoice field extraction.
+    metric: Exact-match field accuracy on labeled samples.
+    result: Better example selection improves consistency on edge-case vendors.
+estimated_cost: $0.05-$0.20 per experiment
+experiments_per_hour: 10
+requires_gpu: false

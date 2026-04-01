@@ -1,0 +1,37 @@
+id: "multi-armed-bandit"
+name: "Multi-Armed Bandit"
+layer: strategy
+description: |
+  Multi-armed bandit methods allocate experiment budget across a fixed set of alternatives while continuously learning which arms are best. Instead of treating all options equally, they adaptively balance exploration of uncertain choices and exploitation of high-performing ones. This is especially useful when you are comparing discrete variants such as models, prompts, features, or product treatments. Thompson sampling, UCB, and related policies provide principled ways to spend trials where they matter most.
+when_to_use: |
+  - Use when you have a discrete menu of alternatives and need to decide where to allocate additional trials.
+  - Use when feedback arrives incrementally and you want the policy to adapt as evidence accumulates.
+  - Use when the objective is repeated selection rather than one-shot global optimization over a continuous space.
+  - Use when you care about minimizing regret while still discovering unexpectedly strong options.
+when_not_to_use: |
+  - Avoid when the search space is continuous or highly structured, since bandits assume a manageable set of arms.
+  - Avoid when each alternative can be tested only once, because the policy benefits from repeated allocation updates.
+  - Avoid when the alternatives themselves are still evolving rapidly and should be generated, not merely allocated.
+  - Avoid when dependencies between arms dominate outcomes and independent arm assumptions break down.
+core_pattern: |
+  1. Define the candidate arms and initialize priors or confidence statistics for each one.
+  2. Select the next arm using an explore-exploit policy such as Thompson sampling or UCB.
+  3. Run the experiment for that arm and observe the reward or score.
+  4. Update the arm's posterior belief or confidence estimate with the new outcome.
+  5. Recompute selection priorities across all arms.
+  6. Continue allocating trials until the budget is spent or one arm is dominant enough to deploy.
+source: "reinforcement-learning"
+tags: ["explore-exploit", "thompson-sampling", "UCB", "adaptive"]
+related: ["bayesian-optimization", "beam-search"]
+examples:
+  - domain: "A/B testing"
+    description: "Allocate more traffic to stronger variants over time while still probing uncertain arms for upside."
+    metric: "conversion rate"
+    result: "Reduced regret compared with evenly splitting traffic for the entire experiment."
+  - domain: "Model selection"
+    description: "Adaptively route benchmark jobs across multiple model candidates instead of evaluating each one uniformly."
+    metric: "reward per run"
+    result: "Concentrated compute on promising models while retaining enough exploration to avoid blind spots."
+estimated_cost: "Low to medium; policy overhead is light and most cost comes from repeated arm evaluations."
+experiments_per_hour: 10
+requires_gpu: false

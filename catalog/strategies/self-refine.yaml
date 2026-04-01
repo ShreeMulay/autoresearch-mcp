@@ -1,0 +1,37 @@
+id: "self-refine"
+name: "Self-Refine"
+layer: strategy
+description: |
+  Self-Refine uses an LLM to critique its own output and then produce an improved revision in an iterative loop. The core advantage is that it can operate even when you do not have an external evaluator, because critique and revision are internalized into the generation process. This makes it a natural fit for writing, code transformation, structured reasoning, and other text-centric tasks where reflection can expose fixable weaknesses. It is best treated as an optimization strategy for candidate quality, often paired with a stronger evaluator later for validation.
+when_to_use: |
+  - Use when an LLM can articulate useful critiques of its own output and revise accordingly.
+  - Use when no external metric is available yet, but quality can still be improved through structured reflection.
+  - Use when tasks are text-native, such as writing, code editing, summarization, or reasoning refinement.
+  - Use when you want fast iterative improvement loops without building a full experimental harness first.
+when_not_to_use: |
+  - Avoid when objective correctness requires an external ground-truth metric rather than self-judgment.
+  - Avoid when the model tends to hallucinate critiques or over-edit outputs that were already good enough.
+  - Avoid when latency or token budget is extremely tight, since each iteration adds critique and rewrite calls.
+  - Avoid when the task is fundamentally non-linguistic and the model has poor internal visibility into failure modes.
+core_pattern: |
+  1. Generate an initial candidate output for the task.
+  2. Ask the model to critique the candidate against explicit quality criteria.
+  3. Extract actionable issues, gaps, or revision instructions from the critique.
+  4. Produce a revised candidate that directly addresses the critique.
+  5. Optionally repeat critique-and-revise cycles until quality plateaus or a limit is reached.
+  6. Return the final revision, and if available, validate it with an external evaluator before adoption.
+source: "Madaan et al. 2023"
+tags: ["self-critique", "iterative", "reflection", "LLM-native"]
+related: ["hill-climbing", "llm-as-judge"]
+examples:
+  - domain: "Writing improvement"
+    description: "Draft an answer, critique clarity and structure, then rewrite repeatedly until the prose is sharper and more complete."
+    metric: "LLM judge score"
+    result: "Improved readability and coverage without requiring human review on every pass."
+  - domain: "Code review + fix"
+    description: "Generate a patch, have the model critique correctness and style issues, then revise the patch before execution."
+    metric: "review issue count"
+    result: "Reduced obvious defects prior to external testing or human inspection."
+estimated_cost: "Medium; token usage increases with each critique-revision cycle but setup overhead is low."
+experiments_per_hour: 8
+requires_gpu: false

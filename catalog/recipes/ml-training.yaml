@@ -1,0 +1,46 @@
+id: ml-training
+name: ML Training
+layer: recipe
+description: |
+  ML Training is the original autoresearch use case: iteratively modify training
+  code, hyperparameters, or architecture choices and keep only the variants that
+  improve validation performance. The loop is simple, but the evaluator is often
+  expensive because it involves real model training jobs. This recipe works best when
+  you have a reliable benchmark harness, controlled datasets, and enough GPU budget to
+  support repeated trials. It is a natural home for validation-loss, bpb, or accuracy-driven optimization.
+when_to_use: |
+  - You can train and evaluate candidate models with a repeatable benchmark harness.
+  - The optimization target is a concrete training metric such as validation loss, bpb, or accuracy.
+  - GPU budget is available for iterative experimentation.
+  - Small code or hyperparameter changes can produce meaningful model improvements.
+when_not_to_use: |
+  - You do not have enough GPU budget or wall-clock time for repeated training runs.
+  - Data quality, labeling, or leakage issues dominate outcomes more than model changes.
+  - The training pipeline is too unstable to compare experiments fairly.
+  - You need large exploratory architecture search that exceeds a single-ratchet workflow.
+core_pattern: |
+  1. Define the training artifact, dataset split, benchmark harness, and target validation metric.
+  2. Run the baseline training job and record cost, runtime, and benchmark results.
+  3. Use hill climbing to propose one focused model, code, or hyperparameter change.
+  4. Train and evaluate the candidate under the same benchmark conditions.
+  5. Keep the candidate only if it improves the primary metric without unacceptable regressions in cost, stability, or secondary benchmarks.
+  6. Promote the winning artifact to baseline and repeat until the metric plateaus or the GPU budget is exhausted.
+source: karpathy/autoresearch-inspired recipe
+tags: [ML, training, GPU, model]
+related: [config-tuning, single-ratchet, general-ratchet]
+composes:
+  search_strategy: hill-climbing
+  evaluator: benchmark-harness
+  execution_pattern: single-ratchet
+examples:
+  - domain: language modeling
+    description: Optimize a training script for lower validation bits-per-byte on a held-out corpus.
+    metric: Validation bpb.
+    result: Iterative script and hyperparameter changes produce steady benchmark gains.
+  - domain: vision training
+    description: Tune augmentation and optimizer settings for an image classifier.
+    metric: Top-1 validation accuracy with training cost tracking.
+    result: The ratchet finds a stronger training recipe without destabilizing convergence.
+estimated_cost: $0.05-$0.15 per experiment plus GPU
+experiments_per_hour: 12
+requires_gpu: true

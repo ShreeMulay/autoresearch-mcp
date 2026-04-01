@@ -1,0 +1,43 @@
+id: pairwise-comparison
+name: Pairwise Comparison
+layer: evaluator
+description: |
+  Pairwise Comparison asks a judge to choose which of two candidates is better for the same task.
+  Relative judgments are often more stable than absolute scores when quality is subjective or hard to calibrate.
+  This pattern is a strong fit for ranking prompt variants, outputs, or designs over repeated tournaments.
+  The resulting win-loss data can be aggregated into Elo, Bradley-Terry, or other ranking systems.
+when_to_use: |
+  - Use when absolute scoring is noisy but preference between two candidates is easier to judge.
+  - Use when you want to rank many variants through tournaments or A/B style comparisons.
+  - Use when subjective quality matters and relative preference is the most trustworthy signal.
+  - Use when you plan to build an Elo or Bradley-Terry leaderboard over time.
+when_not_to_use: |
+  - Do not use when you need an absolute accept/reject threshold rather than a ranking.
+  - Do not use when candidate evaluation cost is too high to support many pairwise matches.
+  - Do not use when only one candidate exists and no baseline is available.
+  - Do not use when judges cannot see enough context to make a fair side-by-side decision.
+core_pattern: |
+  1. Select two candidates that solve the same task.
+  2. Present them in randomized order to a judge with comparison criteria.
+  3. Ask which candidate is better, or whether they are tied.
+  4. Convert the outcome into a win, loss, or tie record.
+  5. Update aggregate rankings using a method such as Elo or Bradley-Terry.
+  6. Repeat across many tasks or matchups until rankings stabilize.
+source: Pairwise preference evaluation and ranking practice
+tags: [relative, A-B-testing, Elo, ranking]
+related: [llm-as-judge, human-approval-gate]
+examples:
+  - domain: prompt-optimization
+    description: Compare two prompt variants and choose which answer is more helpful.
+    metric: pairwise win rate
+    result: 0.63
+  - domain: design
+    description: Ask reviewers which UI design feels clearer and easier to use.
+    metric: preference share
+    result: 0.58
+  - domain: model-ranking
+    description: Rank two model outputs for the same question and accumulate Elo updates.
+    metric: Elo delta
+    result: +24
+estimated_cost: $0.02-0.15 per pair
+requires_gpu: false

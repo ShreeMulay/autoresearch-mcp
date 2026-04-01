@@ -1,0 +1,46 @@
+id: test-amplification
+name: Test Amplification
+layer: recipe
+description: |
+  Test Amplification expands and improves test suites by iteratively generating new
+  tests, running them through a benchmark harness, and keeping only the additions that
+  improve useful coverage or reliability. The focus is not just more tests, but better
+  tests that catch edge cases without introducing flakiness. This makes it a strong fit
+  for codebases that already have a harness and want systematic quality improvement.
+  It can be used for unit, integration, or property-like test generation workflows.
+when_to_use: |
+  - You have an existing test harness and can measure coverage, pass rate, or defect detection.
+  - The goal is to find missing cases or improve confidence without rewriting the product code.
+  - Generated tests can be validated automatically for correctness and stability.
+  - You want incremental, reviewable improvements instead of one huge test dump.
+when_not_to_use: |
+  - The underlying code is too unstable for generated tests to remain meaningful.
+  - There is no reliable way to detect flaky or low-value test additions.
+  - Execution time is already unacceptable and any additional tests would be rejected.
+  - The main need is architecture refactoring rather than test expansion.
+core_pattern: |
+  1. Define the current test suite baseline, target reliability metric, and evaluation harness.
+  2. Use hill climbing to generate a focused set of candidate tests or test edits.
+  3. Run the full benchmark harness, including correctness, coverage, and flakiness checks.
+  4. Compare the candidate suite against the baseline on the chosen metrics.
+  5. Keep only the test changes that improve coverage or bug detection without violating reliability or runtime guardrails.
+  6. Promote the winning suite as the new baseline and continue searching for additional gaps.
+source: Composed recipe from autoresearch patterns
+tags: [testing, coverage, reliability]
+related: [code-performance, general-ratchet, single-ratchet]
+composes:
+  search_strategy: hill-climbing
+  evaluator: benchmark-harness
+  execution_pattern: single-ratchet
+examples:
+  - domain: backend services
+    description: Generate unit tests for validation logic and error branches.
+    metric: Line and branch coverage with zero new flaky failures.
+    result: The suite gains edge-case protection while staying stable in CI.
+  - domain: parsers
+    description: Expand tests for malformed input and boundary conditions.
+    metric: Mutation score plus runtime guardrails.
+    result: Newly amplified tests catch regressions that the original suite missed.
+estimated_cost: $0.05-$0.15 per experiment
+experiments_per_hour: 10
+requires_gpu: false

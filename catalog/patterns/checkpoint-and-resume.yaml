@@ -1,0 +1,35 @@
+id: checkpoint-and-resume
+name: Checkpoint and Resume
+layer: pattern
+description: |
+  Checkpoint and Resume periodically saves enough experiment state to restart work
+  after interruption without losing progress or context. The saved state typically
+  includes artifacts, metrics, history, pending actions, and runtime budget usage.
+  It is a foundational durability pattern for long-running optimization loops,
+  autonomous agents, and failure-prone environments.
+when_to_use: |
+  - Experiments run long enough that crashes, restarts, or operator handoffs are likely.
+  - You need resilience across agent sessions, machines, or scheduling windows.
+  - Recreating intermediate state would be costly in time, tokens, or compute.
+  - Auditability matters and you want a durable record of progress over time.
+when_not_to_use: |
+  - Runs are short, deterministic, and cheap to restart from scratch.
+  - The experiment state is trivial and can be reconstructed instantly.
+  - Persistence adds more complexity than the workflow can justify.
+  - Sensitive intermediate state cannot be stored safely in the available environment.
+core_pattern: |
+  1. Define the minimum complete state needed to restart an experiment safely.
+  2. Save checkpoints on a fixed interval and before risky or expensive operations.
+  3. Persist the current artifact, scores, logs, budgets, and explicit next action.
+  4. On restart, load the latest valid checkpoint and verify state integrity.
+  5. Resume from the recorded next action rather than replaying the entire history.
+  6. Continue checkpointing until the run completes, then archive the final state and results.
+source: Common long-running experiment pattern
+tags: [persistence, resume, fault-tolerant, long-running]
+related: [bounded-episode, branch-and-merge]
+examples:
+  - domain: overnight research
+    description: Persist search progress, extracted notes, and unresolved papers so the next session can continue immediately.
+  - domain: benchmark tuning
+    description: Save the best candidate and completed trial history during a multi-hour optimization run.
+estimated_cost: Low to moderate; small persistence overhead that prevents expensive rework.

@@ -1,0 +1,36 @@
+id: two-loop
+name: Two Loop
+layer: pattern
+description: |
+  Two Loop separates optimization into nested levels: an outer loop that improves
+  the generation strategy itself and an inner loop that applies that strategy to
+  individual items in a batch. This lets you optimize both local item quality and
+  global batch performance without conflating the two. It is especially useful for
+  production pipelines that process many related tasks under one reusable prompt or policy.
+when_to_use: |
+  - You have many similar items to process, such as articles, records, tickets, or prompts.
+  - A shared meta-prompt, rubric, or generation policy affects quality across the whole batch.
+  - You want to optimize aggregate batch outcomes while still improving per-item outputs.
+  - The domain benefits from reusable strategies rather than isolated one-off edits.
+when_not_to_use: |
+  - You only have one item or artifact, so a nested loop adds unnecessary complexity.
+  - Batch members are too heterogeneous for one common strategy to generalize well.
+  - You do not have a way to aggregate quality across items into a meaningful outer-loop signal.
+  - Runtime or budget constraints make repeated batch-level evaluation impractical.
+core_pattern: |
+  1. Define the inner-loop task, the batch of items, and the aggregate metric for the outer loop.
+  2. Start with an initial shared strategy such as a meta-prompt, policy, template, or rubric.
+  3. For each batch item, run the inner loop to generate or refine an item-specific output using the shared strategy.
+  4. Evaluate each item locally, then aggregate scores and failure modes across the batch.
+  5. Use the aggregate feedback to revise the shared strategy in the outer loop.
+  6. Re-run the inner loop with the updated strategy on the next batch or evaluation slice.
+  7. Keep the outer-loop strategy only when overall batch quality improves at acceptable cost.
+source: Generalized autoresearch pattern
+tags: [meta-optimization, batch, nested, compound]
+related: [single-ratchet, bounded-episode]
+examples:
+  - domain: content generation
+    description: Improve a documentation-writing prompt globally while applying it article by article.
+  - domain: research synthesis
+    description: Refine a literature-extraction framework based on aggregate performance across many papers.
+estimated_cost: Moderate to high; outer-loop batch evaluation compounds inner-loop execution cost.

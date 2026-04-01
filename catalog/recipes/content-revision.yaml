@@ -1,0 +1,46 @@
+id: content-revision
+name: Content Revision
+layer: recipe
+description: |
+  Content Revision improves generated or drafted content across a batch of related
+  topics using shared revision guidance and rubric-based scoring. A two-loop setup
+  lets the system optimize both the global revision strategy and the quality of each
+  individual document. This is useful when consistency matters across many outputs,
+  such as documentation sets, educational materials, or knowledge base articles. It
+  balances local writing improvements with batch-level style and coverage goals.
+when_to_use: |
+  - You need to improve many related pieces of content under one shared style or quality bar.
+  - A rubric scorer can evaluate clarity, accuracy, structure, or completeness consistently.
+  - You want to learn a better revision strategy that generalizes across the batch.
+  - Cross-document consistency matters almost as much as per-document quality.
+when_not_to_use: |
+  - You only have one artifact to revise, so a two-loop batch recipe is unnecessary.
+  - The content requires expert human sign-off that cannot be approximated with rubric scoring.
+  - Topic diversity is so wide that a shared revision policy will not transfer well.
+  - The budget cannot support repeated batch-level evaluation passes.
+core_pattern: |
+  1. Define the batch of content items, rubric dimensions, and aggregate quality metric.
+  2. Start with a shared revision prompt or editorial policy for the batch.
+  3. Use hill climbing to improve item-level revisions within the current global strategy.
+  4. Score each revised item with the rubric scorer and aggregate the batch results.
+  5. Update the global revision strategy based on common weaknesses, then rerun the inner loop.
+  6. Keep the strategy changes that improve overall batch quality and continue until the batch reaches the desired standard.
+source: Composed recipe from autoresearch patterns
+tags: [content, writing, batch, quality]
+related: [prompt-optimization, literature-synthesis, two-loop]
+composes:
+  search_strategy: hill-climbing
+  evaluator: rubric-scorer
+  execution_pattern: two-loop
+examples:
+  - domain: product documentation
+    description: Improve onboarding guides across a full docs section.
+    metric: Aggregate rubric score for clarity, completeness, and actionability.
+    result: A stronger revision policy raises quality and consistency across the set.
+  - domain: patient education
+    description: Revise educational handouts on related kidney-care topics.
+    metric: Reading-level compliance plus rubric scores for empathy and accuracy.
+    result: The batch becomes more uniform and easier for patients to understand.
+estimated_cost: $0.10-$0.30 per experiment
+experiments_per_hour: 6
+requires_gpu: false

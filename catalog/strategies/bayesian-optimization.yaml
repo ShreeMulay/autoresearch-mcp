@@ -1,0 +1,37 @@
+id: "bayesian-optimization"
+name: "Bayesian Optimization"
+layer: strategy
+description: |
+  Bayesian optimization uses a surrogate model to estimate which candidate settings are most promising before spending real evaluation budget. Instead of blindly trying many configurations, it balances predicted upside against uncertainty so that each experiment is information-rich. This makes it highly sample-efficient for expensive objectives such as hyperparameter tuning, infrastructure configuration, or long-running evaluation pipelines. It is most effective when the search variables can be encoded cleanly and the evaluator noise is manageable.
+when_to_use: |
+  - Use when each experiment is expensive enough that smarter selection matters more than raw throughput.
+  - Use when you can encode the search space into numeric or categorical parameters for a surrogate model.
+  - Use when you need a disciplined explore-versus-exploit tradeoff rather than ad hoc trial ordering.
+  - Use when you want good results from relatively few experiments compared with brute-force sweeps.
+when_not_to_use: |
+  - Avoid when evaluations are so cheap that random search or hill climbing already covers the space quickly.
+  - Avoid when the search variables are highly unstructured artifacts that are difficult to featurize for a surrogate.
+  - Avoid when the objective is extremely noisy or unstable, making posterior updates unreliable.
+  - Avoid when you need large batches of parallel experiments and the surrogate cannot adapt between them.
+core_pattern: |
+  1. Define the parameterized search space and choose a surrogate model such as a Gaussian process or TPE.
+  2. Evaluate an initial seed set of candidates to establish training data.
+  3. Fit or update the surrogate on observed parameter-value pairs and scores.
+  4. Use an acquisition rule to pick the next candidate that best balances uncertainty and expected improvement.
+  5. Run the real evaluation, record the outcome, and append it to the history.
+  6. Repeat the model-update and proposal cycle until the budget or convergence criterion is reached.
+source: "Optuna/BOHB"
+tags: ["surrogate-model", "sample-efficient", "gaussian-process", "TPE"]
+related: ["hill-climbing", "multi-armed-bandit"]
+examples:
+  - domain: "Hyperparameter tuning"
+    description: "Use a surrogate model to prioritize learning rate, batch size, and regularization settings for expensive training runs."
+    metric: "validation loss"
+    result: "Reached competitive hyperparameters with fewer full training jobs than grid or random search."
+  - domain: "Config optimization"
+    description: "Tune inference, caching, or infrastructure configuration options where each trial has measurable latency or cost implications."
+    metric: "latency-cost composite"
+    result: "Improved operational settings while minimizing wasted evaluations."
+estimated_cost: "Medium; orchestration is more sophisticated, but evaluator savings are strong when trials are expensive."
+experiments_per_hour: 8
+requires_gpu: false

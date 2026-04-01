@@ -1,0 +1,55 @@
+/**
+ * autoresearch-mcp server entry point.
+ * Phase 1: Catalog + Experiment Tracking + Scaffolding via Stdio transport.
+ */
+
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { loadCatalog } from "./db/load-catalog.js";
+import { registerDiscoveryTools } from "./tools/discovery.js";
+import { registerExperimentTools } from "./tools/experiments.js";
+import { registerScaffoldingTools } from "./tools/scaffolding.js";
+import { registerMetaTools } from "./tools/meta.js";
+import { registerResources } from "./resources/catalog.js";
+import { registerPrompts } from "./prompts/advisor.js";
+
+async function main(): Promise<void> {
+  // Load catalog from YAML into SQLite
+  const catalogResult = await loadCatalog();
+  console.error(
+    `[autoresearch-mcp] Catalog loaded: ${catalogResult.loaded} new/updated, ${catalogResult.skipped} unchanged`
+  );
+  if (catalogResult.errors.length > 0) {
+    for (const err of catalogResult.errors) {
+      console.error(`[autoresearch-mcp] Catalog error: ${err}`);
+    }
+  }
+
+  // Create MCP server
+  const server = new McpServer({
+    name: "autoresearch-mcp",
+    version: "0.2.0",
+  });
+
+  // Register all components
+  // Phase 0.5: Discovery
+  registerDiscoveryTools(server);
+  // Phase 1: Experiment management + scaffolding + meta
+  registerExperimentTools(server);
+  registerScaffoldingTools(server);
+  registerMetaTools(server);
+  // Resources + Prompts
+  registerResources(server);
+  registerPrompts(server);
+
+  // Connect via Stdio transport
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  console.error("[autoresearch-mcp] Server running on Stdio transport (Phase 1)");
+}
+
+main().catch((err) => {
+  console.error("[autoresearch-mcp] Fatal error:", err);
+  process.exit(1);
+});

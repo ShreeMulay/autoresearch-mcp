@@ -1,0 +1,46 @@
+id: general-ratchet
+name: General Ratchet
+layer: recipe
+description: |
+  General Ratchet is the bring-your-own-metric template for any domain that can be
+  reduced to editing an artifact and running a command that returns a score. It keeps
+  the orchestration intentionally generic so users can plug in their own file target,
+  evaluator command, and success criteria. This makes it the most flexible recipe in
+  the catalog and a good on-ramp for new use cases before a more specialized recipe
+  exists. The only real requirement is a metric that can drive accept-or-reject decisions.
+when_to_use: |
+  - You already have a script or command that outputs a comparable numeric metric.
+  - The domain does not yet need a dedicated specialized recipe.
+  - You want a reusable template that works across prompts, code, configs, or content.
+  - A simple ratchet loop is enough to make measurable progress.
+when_not_to_use: |
+  - The workflow requires nested batch logic, branch orchestration, or strong domain-specific guardrails.
+  - There is no trustworthy evaluator command to drive decisions.
+  - The optimization target is too multi-objective to reduce to a primary score plus simple constraints.
+  - You need rich domain guidance that a generic template will not provide.
+core_pattern: |
+  1. Specify the target artifact, evaluator command, primary metric, and acceptance rules.
+  2. Run the evaluator to record the baseline score and execution context.
+  3. Use hill climbing to propose one candidate edit to the target artifact.
+  4. Re-run the evaluator command and parse the returned metric.
+  5. Keep the change only if it improves the score and respects any secondary constraints.
+  6. Promote the better version to baseline, log the result, and continue until the user-defined stopping rule is met.
+source: Generic autoresearch template
+tags: [generic, customizable, bring-your-own]
+related: [prompt-optimization, config-tuning, single-ratchet]
+composes:
+  search_strategy: hill-climbing
+  evaluator: benchmark-harness
+  execution_pattern: single-ratchet
+examples:
+  - domain: search relevance
+    description: Optimize a ranking prompt or config using an offline relevance script.
+    metric: Mean reciprocal rank.
+    result: The generic loop improves the score without domain-specific orchestration.
+  - domain: data processing
+    description: Tune a transformation pipeline with a custom validation command returning accuracy.
+    metric: Final validation accuracy.
+    result: Users can ratchet improvements as long as the command emits a float.
+estimated_cost: Varies with the user-provided evaluator command; often low to moderate.
+experiments_per_hour: 10
+requires_gpu: false

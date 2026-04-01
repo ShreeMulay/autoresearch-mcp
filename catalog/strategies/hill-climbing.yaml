@@ -1,0 +1,37 @@
+id: "hill-climbing"
+name: "Hill Climbing"
+layer: strategy
+description: |
+  Hill climbing is the simplest useful autoresearch loop: propose one change, run an evaluation, and keep it only if the score improves. It is a greedy local search strategy that trades sophistication for speed, interpretability, and operational simplicity. Because each iteration changes only one thing, it is easy to attribute gains or regressions to a specific edit. This makes it an excellent default strategy for early system versions, low-cost experiments, and domains where the metric is stable and trustworthy.
+when_to_use: |
+  - Use when you have a clear scalar metric and fast feedback after each experiment.
+  - Use when you want a minimal implementation with highly understandable decision-making.
+  - Use when each proposed change is small enough that attribution matters more than exploration breadth.
+  - Use when the search space is smooth enough that local improvements often compound into meaningful gains.
+when_not_to_use: |
+  - Avoid when the objective landscape has many deceptive local optima and small greedy moves get stuck quickly.
+  - Avoid when experiments are so expensive that you need smarter proposal selection than random local edits.
+  - Avoid when progress depends on coordinated multi-parameter changes that rarely help in isolation.
+  - Avoid when the evaluator is noisy enough that tiny wins are hard to distinguish from randomness.
+core_pattern: |
+  1. Start from a baseline candidate with a known score.
+  2. Propose one localized modification to the current best candidate.
+  3. Run the evaluator and record the new score, cost, and artifact details.
+  4. If the candidate improves the objective, promote it to the new incumbent.
+  5. If it does not improve the objective, discard it and revert to the incumbent.
+  6. Repeat until the budget, patience limit, or improvement threshold is exhausted.
+source: "karpathy/autoresearch"
+tags: ["greedy", "local-search", "simple", "karpathy"]
+related: ["simulated-annealing", "bayesian-optimization"]
+examples:
+  - domain: "ML training optimization"
+    description: "Adjust one training hyperparameter or scheduler setting at a time and keep the change only when validation performance improves."
+    metric: "val_bpb"
+    result: "Steady incremental gains with clear attribution to each accepted change."
+  - domain: "Prompt optimization"
+    description: "Edit one instruction, example, or formatting choice per iteration and preserve only higher-scoring prompts."
+    metric: "eval score"
+    result: "Reliable prompt improvements without needing a complex orchestration stack."
+estimated_cost: "Low; one candidate is evaluated at a time and orchestration overhead is minimal."
+experiments_per_hour: 12
+requires_gpu: false

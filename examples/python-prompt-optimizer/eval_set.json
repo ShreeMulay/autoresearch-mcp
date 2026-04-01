@@ -1,0 +1,62 @@
+[
+  {
+    "id": 1,
+    "question": "How do I reverse a string in Python?",
+    "expected_keywords": ["[::-1]", "reverse", "slice"],
+    "expected_has_code": true
+  },
+  {
+    "id": 2,
+    "question": "What is the difference between a list and a tuple in Python?",
+    "expected_keywords": ["mutable", "immutable", "tuple", "list"],
+    "expected_has_code": false
+  },
+  {
+    "id": 3,
+    "question": "How do I read a JSON file in Python?",
+    "expected_keywords": ["json", "open", "load"],
+    "expected_has_code": true
+  },
+  {
+    "id": 4,
+    "question": "Explain Python list comprehensions with an example.",
+    "expected_keywords": ["comprehension", "for", "in"],
+    "expected_has_code": true
+  },
+  {
+    "id": 5,
+    "question": "How do I handle exceptions in Python?",
+    "expected_keywords": ["try", "except", "finally"],
+    "expected_has_code": true
+  },
+  {
+    "id": 6,
+    "question": "What are Python decorators and how do they work?",
+    "expected_keywords": ["decorator", "@", "wrapper", "function"],
+    "expected_has_code": true
+  },
+  {
+    "id": 7,
+    "question": "How do I merge two dictionaries in Python?",
+    "expected_keywords": ["merge", "update", "|", "dict"],
+    "expected_has_code": true
+  },
+  {
+    "id": 8,
+    "question": "What is the difference between == and is in Python?",
+    "expected_keywords": ["equality", "identity", "value", "object"],
+    "expected_has_code": true
+  },
+  {
+    "id": 9,
+    "question": "How do I sort a list of dictionaries by a specific key?",
+    "expected_keywords": ["sorted", "key", "lambda"],
+    "expected_has_code": true
+  },
+  {
+    "id": 10,
+    "question": "Explain Python's GIL and its impact on multithreading.",
+    "expected_keywords": ["GIL", "global interpreter lock", "thread", "multiprocessing"],
+    "expected_has_code": false
+  }
+]

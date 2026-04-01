@@ -1,0 +1,43 @@
+id: cost-latency-evaluator
+name: Cost Latency Evaluator
+layer: evaluator
+description: |
+  Cost Latency Evaluator measures the non-functional side of a candidate such as token use, dollar cost, latency, and compute footprint.
+  It ensures optimization does not quietly improve quality by becoming too slow or too expensive.
+  This evaluator is essential when systems must satisfy budgets, SLAs, or fixed resource envelopes.
+  In practice, it acts as the efficiency counterpart to a primary quality metric.
+when_to_use: |
+  - Use when quality improvements must stay within latency, cost, or resource budgets.
+  - Use when comparing candidates that vary in prompt length, model size, or runtime complexity.
+  - Use when the production environment has strict SLAs or cost ceilings.
+  - Use when optimization should explicitly reward efficiency rather than only output quality.
+when_not_to_use: |
+  - Do not use as the sole evaluator when output quality itself is still unmeasured.
+  - Do not use when measurement instrumentation for tokens, time, or compute is missing or unreliable.
+  - Do not use if the domain is offline research and efficiency constraints are intentionally irrelevant.
+  - Do not use in isolation when secondary regressions need broader monitoring beyond efficiency.
+core_pattern: |
+  1. Define the efficiency metrics that matter, such as tokens, dollars, latency, or memory.
+  2. Run the candidate under representative workload conditions.
+  3. Capture the measured resource usage for each metric.
+  4. Compare results against hard caps, baselines, or weighted efficiency targets.
+  5. Flag any candidate that improves quality only by violating the efficiency budget.
+  6. Store the measurements alongside primary quality scores for tradeoff analysis.
+source: Production performance engineering practice
+tags: [efficiency, constraints, non-functional, SLA]
+related: [benchmark-harness, regression-detector]
+examples:
+  - domain: prompt-engineering
+    description: Reject a prompt that improves answer quality but doubles token count.
+    metric: tokens per response
+    result: 1820
+  - domain: api-systems
+    description: Measure end-to-end latency against a 500 ms budget.
+    metric: p95 latency ms
+    result: 430
+  - domain: inference-ops
+    description: Enforce a per-request cost cap while testing larger models.
+    metric: dollars per eval
+    result: 0.012
+estimated_cost: ~$0
+requires_gpu: false
