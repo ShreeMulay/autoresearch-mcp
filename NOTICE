@@ -1,0 +1,13 @@
+autoresearch-mcp
+Copyright 2026 Shree Mulay
+
+This project is inspired by Andrej Karpathy's autoresearch:
+https://github.com/karpathy/autoresearch
+
+The autoresearch pattern — giving an AI agent a real experiment setup and letting
+it iterate autonomously — was conceived and demonstrated by Andrej Karpathy.
+This MCP server generalizes that pattern into a composable technique catalog and
+experiment tracking system accessible through the Model Context Protocol.
+
+This project does not contain any code from the original autoresearch repository.
+It is an independent implementation inspired by the methodology.

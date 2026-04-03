@@ -1,0 +1,50 @@
+name: New Technique Proposal
+description: Propose a new search strategy, evaluator, pattern, or recipe
+title: "[Technique]: "
+body:
+  - type: input
+    id: technique_name
+    attributes:
+      label: Technique name
+      placeholder: Example: adaptive-sampling
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Layer
+      options:
+        - strategy
+        - evaluator
+        - pattern
+        - recipe
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe what the technique does and how it works.
+      placeholder: Explain the technique in practical terms.
+    validations:
+      required: true
+
+  - type: textarea
+    id: when_to_use
+    attributes:
+      label: When to use
+      description: Explain the conditions where this technique is a good fit.
+      placeholder: Describe the use cases, constraints, or signals that make this useful.
+    validations:
+      required: true
+
+  - type: input
+    id: related_techniques
+    attributes:
+      label: Related techniques
+      description: Optional. List related technique IDs or names.
+      placeholder: Example: hill-climbing, single-ratchet
+    validations:
+      required: false

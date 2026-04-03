@@ -2,7 +2,38 @@
   "name": "autoresearch-mcp",
   "version": "0.1.0",
   "type": "module",
-  "description": "MCP server for autoresearch technique discovery, experiment scaffolding, and autonomous optimization loops",
+  "description": "MCP server for autoresearch technique discovery, experiment scaffolding, and autonomous optimization loops. Inspired by Andrej Karpathy's autoresearch.",
+  "license": "Apache-2.0",
+  "author": "Shree Mulay",
+  "homepage": "https://github.com/shreemulay/autoresearch-mcp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shreemulay/autoresearch-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shreemulay/autoresearch-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "autoresearch",
+    "karpathy",
+    "model-context-protocol",
+    "ai-agents",
+    "experiment-tracking",
+    "prompt-optimization",
+    "hill-climbing",
+    "ratchet",
+    "autonomous-research"
+  ],
+  "bin": {
+    "autoresearch-mcp": "./src/index.ts"
+  },
+  "files": [
+    "src/",
+    "catalog/",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
@@ -21,5 +52,8 @@
     "@biomejs/biome": "^1.9.0",
     "@types/bun": "latest",
     "typescript": "^5.7.0"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
   }
 }
