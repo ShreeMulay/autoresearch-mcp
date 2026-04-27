@@ -1,0 +1,244 @@
+---
+name: autoresearch
+description: Select and apply autoresearch techniques for optimization problems. Use when user says 'optimize', 'improve this', 'run experiments', 'find best technique', 'ratchet', or when tackling prompt engineering, code optimization, ML training, or workflow tuning. Complements the autoresearch-mcp server (tools + state) with methodology, decision trees, and composition rules. Guides the AI through the full ratchet loop from problem identification to meta-learning.
+---
+
+# Autoresearch Skill
+
+## When to Activate
+
+### Explicit Triggers
+User says any of: "optimize", "improve this", "run experiments", "find best technique", "ratchet", "hill-climbing", "prompt optimization", "autoresearch", "experiment tracking", "measure performance", "tune hyperparameters", "iterate on", "A/B test", "champion-challenger"
+
+### Implicit Signals
+- User describes a problem with a measurable outcome but no clear solution path
+- User wants to improve something that has been working but could be better
+- User mentions comparing options, iterating, or testing variations
+- User is writing prompts, code, configs, or content and wants the best version
+
+### When NOT to Use
+- One-off tasks with no repeatable evaluation ("write a greeting email")
+- Problems with no measurable metric ("make this nicer")
+- Time-critical fixes where experimentation delays matter ("production is down")
+- User explicitly says "just pick one" or "I don't care about optimal"
+
+## Core Philosophy
+
+Autoresearch is iterative improvement against a repeatable evaluation. The loop is:
+
+```
+Discover → Suggest → Scaffold → Run → Evaluate → Log → Ratchet → Meta-Learn
+```
+
+**Ratchet principle**: Only keep improvements. The best-so-far (champion) is replaced only by something measurably better.
+
+**Meta-learning principle**: Every experiment teaches us what works in which domain. Log outcomes so future suggestions improve.
+
+## Decision Tree: Which Technique?
+
+Start here. Answer these questions in order.
+
+### Q1: Do you have a scalar metric?
+A single number that defines success (accuracy, latency, score, cost, conversion rate).
+
+**YES** → Use a ratchet pattern (single-ratchet, champion-challenger, two-loop)
+**NO** → Use an evaluator-first approach (llm-as-judge, rubric-scorer, human-approval-gate)
+
+### Q2: How long can one experiment take?
+
+- **< 1 minute** → Hill-climbing or evolutionary (many iterations fast)
+- **1-60 minutes** → Beam-search or Bayesian optimization (fewer, smarter iterations)
+- **> 1 hour or overnight** → Prompt-optimization, tree-search, or multi-armed-bandit
+
+### Q3: Batch or single?
+
+- **Single artifact** (one prompt, one function) → Single-ratchet or self-refine
+- **Batch of related items** (100 articles, 50 records) → Two-loop (outer strategy + inner batch)
+- **Continuous stream** → Champion-challenger or multi-armed-bandit
+
+### Q4: Human in the loop?
+
+- **Fully autonomous** → Any ratchet pattern with automated evaluator
+- **Human approves each change** → Human-approval-gate evaluator
+- **Human judges final output** → LLM-as-judge or pairwise-comparison
+
+### Q5: Domain-specific defaults
+
+| Domain | Default Recipe | Why |
+|--------|---------------|-----|
+| Prompt engineering | prompt-optimization | Natural language mutations, fast eval |
+| Code performance | code-performance | Benchmark harness, regression detector |
+| ML training | ml-training | Cost/latency eval, bounded episodes |
+| Content revision | content-revision | LLM-as-judge, iterative refinement |
+| Configuration tuning | config-tuning | Bayesian optimization, small search space |
+| Test amplification | test-amplification | Regression detector, strict improvement |
+| General (unsure) | general-ratchet | Safe defaults, flexible composition |
+
+## Core Workflows
+
+### Workflow A: Quick Optimization (5 minutes)
+
+For fast problems with clear metrics.
+
+1. **Discover**: Call `suggest_technique` with problem description
+2. **Scaffold**: Call `scaffold_experiment` with top recipe
+3. **Run**: Execute evaluator, observe score
+4. **Iterate**: Propose mutation, re-run, compare to champion
+5. **Log**: Call `log_result` for each iteration
+6. **Decide**: 3-5 iterations, pick best
+
+### Workflow B: Serious Experiment (1 hour)
+
+For important optimizations with budget for rigor.
+
+1. **Discover**: `suggest_technique` + `search_techniques` for related approaches
+2. **Get details**: `get_technique` on top 2-3 candidates
+3. **Register**: `register_experiment` with full spec
+4. **Scaffold**: `scaffold_experiment` for starter files
+5. **Run ratchet**: 10-20 iterations, strict champion replacement
+6. **Log all**: `log_result` every iteration
+7. **Analyze**: `get_experiment` with include_results=true
+8. **Meta-learn**: `log_technique_outcome` with what worked
+
+### Workflow C: Overnight Batch (autonomous)
+
+For problems that can run while you sleep.
+
+1. **Setup**: Register experiment, scaffold, verify evaluator works manually
+2. **Script**: Write loop script that mutates, evaluates, logs, sleeps
+3. **Run**: Start script, walk away
+4. **Morning**: `get_experiment` to see results, `list_experiments` for overview
+5. **Integrate**: Apply best result, `update_experiment` to completed
+
+## MCP Tool Mapping
+
+| Workflow Step | Primary Tool | Purpose |
+|--------------|-------------|---------|
+| Discover techniques | `suggest_technique` | AI recommends based on your constraints |
+| Deep dive | `get_technique` | Full details, templates, examples |
+| Browse catalog | `search_techniques` | Natural language search all 30 techniques |
+| Start tracking | `register_experiment` | Create experiment record in SQLite |
+| Generate files | `scaffold_experiment` | Create program.md + eval.sh starter files |
+| Log iteration | `log_result` | Record score, change description, cost |
+| View progress | `get_experiment` | Experiment summary + all results |
+| Browse runs | `list_experiments` | All experiments, filter by status/project |
+| Update status | `update_experiment` | Mark running/paused/completed/failed |
+| Meta-learning | `log_technique_outcome` | "This technique worked in this domain" |
+| Self-improve | `log_technique_outcome` + `search_techniques` | Build outcome database for better suggestions |
+
+## Composition Rules
+
+Recipes are composed from 4 layers. You can build custom recipes by mixing layers.
+
+### Layers
+
+1. **Strategy** (search algorithm): How do you explore the space?
+   - hill-climbing: greedy local search
+   - evolutionary: population-based, genetic mutations
+   - bayesian-optimization: model-based, sample-efficient
+   - beam-search: keep top-k candidates
+   - simulated-annealing: early exploration, late exploitation
+
+2. **Evaluator** (scoring function): How do you judge success?
+   - benchmark-harness: automated benchmark
+   - llm-as-judge: frontier model evaluates quality
+   - rubric-scorer: structured rubric scoring
+   - regression-detector: must not break existing
+   - human-approval-gate: human decides
+
+3. **Pattern** (execution structure): How do you organize the loop?
+   - single-ratchet: one champion, replace if better
+   - two-loop: outer strategy + inner batch
+   - champion-challenger: A/B test with traffic splitting
+   - bounded-episode: fixed budget, best wins
+   - checkpoint-and-resume: save state, restart later
+
+4. **Recipe** (pre-composed defaults): Ready-made combinations for common problems.
+   - prompt-optimization: hill-climbing + llm-as-judge + single-ratchet
+   - code-performance: bayesian-opt + benchmark-harness + single-ratchet
+   - ml-training: evolutionary + cost-latency-eval + bounded-episode
+
+### Building Custom Recipes
+
+Pick one from each layer. The only rule: strategy and evaluator must be compatible.
+
+```
+Strategy              + Evaluator                    + Pattern           = Recipe
+hill-climbing         + llm-as-judge                 + single-ratchet    = prompt-optimization variant
+evolutionary          + benchmark-harness          + bounded-episode   = code-performance variant
+bayesian-optimization + rubric-scorer                + champion-challenger = config-tuning variant
+```
+
+**Compatibility rules**:
+- GPU-required strategies (some evolutionary variants) need GPU evaluator or surrogate
+- Human-approval-gate limits iteration speed — pair with sample-efficient strategies (Bayesian, bandit)
+- Regression-detector should wrap any evaluator for production systems
+
+## Anti-Patterns
+
+### DON'T: Run without registering
+Always `register_experiment` before `log_result`. Orphaned results lose context.
+
+### DON'T: Skip evaluation
+"Looks better" is not a metric. Define the evaluator before running the loop.
+
+### DON'T: Change the metric mid-experiment
+If you realize your metric is wrong, stop, register a new experiment with the new metric.
+
+### DON'T: Run infinite loops without checkpoints
+Use bounded-episode or checkpoint-and-resume. Power outages happen.
+
+### DON'T: Ignore cost
+Set token/dollar budgets. Call `log_result` with cost data. Review `list_experiments` to see cumulative spend.
+
+### DON'T: Forget meta-learning
+After every experiment, `log_technique_outcome`. This is how the system gets smarter.
+
+### DON'T: Over-optimize early
+Start with general-ratchet recipe. Only build custom compositions after 3+ experiments in the same domain.
+
+## Reference
+
+- Full technique catalog: `references/technique-index.md`
+- Composition patterns: `references/composition-patterns.md`
+- Workflow examples: `references/workflow-examples.md`
+
+## Quick Reference: All Techniques
+
+| ID | Layer | Name | One-Line |
+|----|-------|------|----------|
+| hill-climbing | strategy | Hill Climbing | Greedy local search, best neighbor wins |
+| evolutionary | strategy | Evolutionary | Population-based genetic mutations |
+| bayesian-optimization | strategy | Bayesian Optimization | Model-based, sample-efficient |
+| beam-search | strategy | Beam Search | Keep top-k candidates |
+| simulated-annealing | strategy | Simulated Annealing | Early exploration, late exploitation |
+| multi-armed-bandit | strategy | Multi-Armed Bandit | Explore/exploit with regret bounds |
+| self-refine | strategy | Self-Refine | Iterative self-correction |
+| ablation-elimination | strategy | Ablation Elimination | Remove components, measure impact |
+| benchmark-harness | evaluator | Benchmark Harness | Automated performance benchmark |
+| llm-as-judge | evaluator | LLM as Judge | Frontier model evaluates quality |
+| rubric-scorer | evaluator | Rubric Scorer | Structured rubric scoring |
+| pairwise-comparison | evaluator | Pairwise Comparison | A/B comparison between candidates |
+| regression-detector | evaluator | Regression Detector | Must not break existing behavior |
+| human-approval-gate | evaluator | Human Approval Gate | Human decides yes/no |
+| cost-latency-evaluator | evaluator | Cost/Latency Evaluator | Multi-objective cost scoring |
+| single-ratchet | pattern | Single Ratchet | One champion, replace if better |
+| two-loop | pattern | Two Loop | Outer strategy + inner batch |
+| champion-challenger | pattern | Champion-Challenger | A/B test with traffic splitting |
+| bounded-episode | pattern | Bounded Episode | Fixed budget, best wins |
+| checkpoint-and-resume | pattern | Checkpoint & Resume | Save state, restart later |
+| branch-and-merge | pattern | Branch & Merge | Parallel branches, merge best |
+| prompt-optimization | recipe | Prompt Optimization | Optimize prompts with ratchet loop |
+| code-performance | recipe | Code Performance | Optimize code speed/memory |
+| ml-training | recipe | ML Training | Tune hyperparameters |
+| content-revision | recipe | Content Revision | Iterate on text/content |
+| config-tuning | recipe | Config Tuning | Optimize configuration files |
+| test-amplification | recipe | Test Amplification | Generate tests to find bugs |
+| general-ratchet | recipe | General Ratchet | Default recipe for any domain |
+| literature-synthesis | recipe | Literature Synthesis | Research synthesis from papers |
+
+## Attribution
+
+Methodology inspired by Andrej Karpathy's autoresearch. This skill + the autoresearch-mcp server implement the composable technique catalog pattern for AI-assisted optimization.
+
+License: Apache-2.0

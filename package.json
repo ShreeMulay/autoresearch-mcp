@@ -1,8 +1,8 @@
 {
   "name": "autoresearch-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "MCP server for autoresearch technique discovery, experiment scaffolding, and autonomous optimization loops. Inspired by Andrej Karpathy's autoresearch.",
+  "description": "MCP server for autoresearch technique discovery, experiment scaffolding, and autonomous optimization loops. Inspired by Andrej Karpathy's autoresearch. Includes AI skill for OpenCode, Claude Code, and pi.dev.",
   "license": "Apache-2.0",
   "author": "Shree Mulay",
   "homepage": "https://github.com/shreemulay/autoresearch-mcp",
@@ -23,7 +23,10 @@
     "prompt-optimization",
     "hill-climbing",
     "ratchet",
-    "autonomous-research"
+    "autonomous-research",
+    "skill",
+    "opencode",
+    "claude-code"
   ],
   "bin": {
     "autoresearch-mcp": "./src/index.ts"
@@ -31,17 +34,23 @@
   "files": [
     "src/",
     "catalog/",
+    "skills/",
+    "scripts/",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "NOTICE",
+    "ACKNOWLEDGMENTS.md",
+    "CONTRIBUTING.md"
   ],
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "start": "bun run src/index.ts",
     "test": "bun test",
-    "lint": "bunx biome check src/",
+    "lint": "bunx biome check src/ tests/",
     "typecheck": "bunx tsc --noEmit",
-    "load-catalog": "bun run src/db/load-catalog.ts"
+    "load-catalog": "bun run src/db/load-catalog.ts",
+    "postinstall": "node scripts/install-skill.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
