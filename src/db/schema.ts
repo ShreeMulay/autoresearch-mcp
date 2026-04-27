@@ -9,19 +9,32 @@ import { resolve } from "node:path";
 const DB_PATH = resolve(import.meta.dir, "../../data/autoresearch.db");
 
 let _db: Database | null = null;
+let _dbPath: string = DB_PATH;
 
 export function getDb(): Database {
-  if (!_db) {
-    _db = new Database(DB_PATH, { create: true });
-    _db.exec("PRAGMA journal_mode = WAL");
-    _db.exec("PRAGMA foreign_keys = ON");
-    initSchema(_db);
-  }
-  return _db;
+	if (!_db) {
+		_db = new Database(_dbPath, { create: true });
+		_db.exec("PRAGMA journal_mode = WAL");
+		_db.exec("PRAGMA foreign_keys = ON");
+		initSchema(_db);
+	}
+	return _db;
+}
+
+/**
+ * Reset the database connection. Used in tests to switch to :memory:.
+ * @param path Optional new DB path. Defaults to the standard file path.
+ */
+export function resetDb(path?: string): void {
+	if (_db) {
+		_db.close();
+		_db = null;
+	}
+	_dbPath = path ?? DB_PATH;
 }
 
 function initSchema(db: Database): void {
-  db.exec(`
+	db.exec(`
     -- Catalog items (techniques from all 4 layers)
     CREATE TABLE IF NOT EXISTS catalog_items (
       id TEXT PRIMARY KEY,
@@ -136,8 +149,8 @@ function initSchema(db: Database): void {
 }
 
 export function closeDb(): void {
-  if (_db) {
-    _db.close();
-    _db = null;
-  }
+	if (_db) {
+		_db.close();
+		_db = null;
+	}
 }
