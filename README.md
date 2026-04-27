@@ -27,7 +27,39 @@ npm install -g autoresearch-mcp
 bunx autoresearch-mcp
 ```
 
-### Claude Code
+### Install as Skill (Recommended)
+
+`autoresearch-mcp` ships with a skill file that teaches your AI agent the autoresearch methodology: when to use which technique, how to compose recipes, and how to run ratchet loops. The skill is lightweight (~100-400 tokens in context) while the MCP server provides the heavy machinery (catalog search, experiment tracking, scaffolding).
+
+**Skill + MCP = Brain + Hands**
+
+#### OpenCode
+
+```bash
+# Auto-install via npm postinstall script (run after npm install)
+# Or manual symlink:
+ln -s $(npm root -g)/autoresearch-mcp/skills/autoresearch ~/.opencode/skills/autoresearch
+```
+
+Skills are auto-discovered from `~/.opencode/skills/`. The skill lazy-loads when your agent encounters optimization problems.
+
+#### Claude Code
+
+```bash
+ln -s $(npm root -g)/autoresearch-mcp/skills/autoresearch ~/.claude/skills/autoresearch
+```
+
+#### pi.dev
+
+```bash
+pi --skill $(npm root -g)/autoresearch-mcp/skills/autoresearch/SKILL.md
+```
+
+### Install as MCP Server (Machinery)
+
+The MCP server provides tools and state. Install alongside the skill for full capability.
+
+#### Claude Code
 
 Add this to your MCP settings:
 
@@ -42,7 +74,7 @@ Add this to your MCP settings:
 }
 ```
 
-### OpenCode
+#### OpenCode
 
 Add this to `~/.config/opencode/opencode.json`:
 
@@ -261,11 +293,12 @@ If your client expects a single executable command, point it at the same Bun-bas
 
 ## Roadmap
 
-This release focuses on discovery, tracking, and scaffolding. Planned next phases:
-
-- Phase 2: Autonomous runner with agent-driven execution and approval-aware loops
-- Phase 3: Docker sandbox for safer code execution and isolated experiments
-- Phase 4: Nightcrawler-style bounded episodes for longer autonomous optimization runs
+- Phase 0.5: Catalog discovery + FTS5 search
+- Phase 1: Experiment tracking + scaffolding
+- **Phase 2: Skill + tests + public release** (current)
+- Phase 3: Autonomous runner with agent-driven execution and approval-aware loops
+- Phase 4: Docker sandbox for safer code execution and isolated experiments
+- Phase 5: Nightcrawler-style bounded episodes for longer autonomous optimization runs
 
 The direction is simple: start with trustworthy building blocks, then expand toward increasingly autonomous experiment execution.
 
