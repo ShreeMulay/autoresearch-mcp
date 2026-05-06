@@ -2,14 +2,13 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   ci:
+    name: Quality Gates
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -29,14 +28,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock*') }}
           restore-keys: |
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Typecheck
+      - name: Type check
         run: bunx tsc --noEmit
 
       - name: Lint
