@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 /**
- * Post-install script: optionally symlink the autoresearch skill
- * to the user's skill directories for OpenCode and Claude Code.
+ * Explicit skill installation CLI for autoresearch-mcp.
  *
- * Idempotent: skips if already installed.
- * Non-blocking: warns but does not error on permission issues.
+ * Usage:
+ *   npx autoresearch-install-skill [--target <platform>] [--dry-run]
+ *   npx autoresearch-mcp install-skill [--target <platform>] [--dry-run]
+ *
+ * Platforms: opencode, claude, all (default: all)
+ * --dry-run: print what would be done without making changes
  */
 
 import { symlink, mkdir, access, readlink } from "node:fs/promises";
@@ -17,21 +20,59 @@ const __dirname = dirname(__filename);
 
 const skillSrc = resolve(__dirname, "../skills/autoresearch");
 
-const targets = [
-	{
+const PLATFORMS: Record<string, { name: string; dir: string; link: string }> = {
+	opencode: {
 		name: "OpenCode",
 		dir: join(homedir(), ".opencode", "skills"),
 		link: join(homedir(), ".opencode", "skills", "autoresearch"),
 	},
-	{
+	claude: {
 		name: "Claude Code",
 		dir: join(homedir(), ".claude", "skills"),
 		link: join(homedir(), ".claude", "skills", "autoresearch"),
 	},
-];
+};
 
-async function installSkill() {
-	console.log("autoresearch-mcp: checking skill installation...\n");
+function parseArgs(): { target: string; dryRun: boolean } {
+	const args = process.argv.slice(2);
+	let target = "all";
+	let dryRun = false;
+
+	for (let i = 0; i < args.length; i++) {
+		if (args[i] === "--target" || args[i] === "-t") {
+			target = args[i + 1] ?? "all";
+			i++;
+		} else if (args[i] === "--dry-run" || args[i] === "-d") {
+			dryRun = true;
+		}
+	}
+
+	return { target, dryRun };
+}
+
+async function installSkill(): Promise<void> {
+	const { target, dryRun } = parseArgs();
+
+	const targets =
+		target === "all"
+			? Object.values(PLATFORMS)
+			: [PLATFORMS[target]].filter(Boolean);
+
+	if (targets.length === 0) {
+		console.error(`Unknown target: ${target}`);
+		console.error(`Valid targets: ${Object.keys(PLATFORMS).join(", ")}, all`);
+		process.exit(1);
+	}
+
+	if (dryRun) {
+		console.log("[DRY RUN] Would install skill to:");
+		for (const t of targets) {
+			console.log(`  ${t.name}: ${t.link} -> ${skillSrc}`);
+		}
+		return;
+	}
+
+	console.log("autoresearch-mcp: installing skill...\n");
 
 	let installed = 0;
 	let skipped = 0;
@@ -39,7 +80,6 @@ async function installSkill() {
 
 	for (const target of targets) {
 		try {
-			// Ensure parent directory exists
 			await mkdir(target.dir, { recursive: true });
 
 			// Check if already installed
@@ -88,9 +128,7 @@ async function installSkill() {
 			`autoresearch skill installed for ${installed} platform(s). Restart your AI client to load it.`
 		);
 	} else if (skipped > 0 && failed === 0) {
-		console.log(
-			"autoresearch skill already installed. No changes needed."
-		);
+		console.log("autoresearch skill already installed. No changes needed.");
 	}
 
 	if (failed > 0) {
@@ -102,6 +140,7 @@ async function installSkill() {
 	}
 }
 
-installSkill().catch(() => {
-	// Silently ignore top-level errors — install should never block npm install
+installSkill().catch((err) => {
+	console.error("Install failed:", err);
+	process.exit(1);
 });

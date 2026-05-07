@@ -5,20 +5,30 @@
 
 import { Database } from "bun:sqlite";
 import { resolve } from "node:path";
+import { homedir } from "node:os";
 
-const DB_PATH = resolve(import.meta.dir, "../../data/autoresearch.db");
+const DEFAULT_DB_PATH = resolve(import.meta.dir, "../../data/autoresearch.db");
+
+function getDbPath(): string {
+  if (process.env.AUTORESEARCH_DB_PATH) {
+    return resolve(process.env.AUTORESEARCH_DB_PATH);
+  }
+  return DEFAULT_DB_PATH;
+}
 
 let _db: Database | null = null;
-let _dbPath: string = DB_PATH;
+let _dbPath: string = getDbPath();
 
 export function getDb(): Database {
-	if (!_db) {
-		_db = new Database(_dbPath, { create: true });
-		_db.exec("PRAGMA journal_mode = WAL");
-		_db.exec("PRAGMA foreign_keys = ON");
-		initSchema(_db);
-	}
-	return _db;
+  if (!_db) {
+    _db = new Database(_dbPath, { create: true });
+    _db.exec("PRAGMA journal_mode = WAL");
+    _db.exec("PRAGMA foreign_keys = ON");
+    _db.exec("PRAGMA busy_timeout = 5000");
+    initSchema(_db);
+    runMigrations(_db);
+  }
+  return _db;
 }
 
 /**
@@ -26,11 +36,65 @@ export function getDb(): Database {
  * @param path Optional new DB path. Defaults to the standard file path.
  */
 export function resetDb(path?: string): void {
-	if (_db) {
-		_db.close();
-		_db = null;
-	}
-	_dbPath = path ?? DB_PATH;
+  if (_db) {
+    _db.close();
+    _db = null;
+  }
+  _dbPath = path ?? getDbPath();
+}
+
+// ============================================================
+// Migrations
+// ============================================================
+
+interface Migration {
+  version: number;
+  name: string;
+  sql: string;
+}
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    name: "initial_schema",
+    sql: `SELECT 1;`,
+  },
+];
+
+function runMigrations(db: Database): void {
+  // Create migrations tracking table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS _migrations (
+      version INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // Get current version
+  const currentVersion = (
+    db
+      .prepare("SELECT MAX(version) as version FROM _migrations")
+      .get() as { version: number | null }
+  ).version ?? 0;
+
+  // Apply pending migrations
+  for (const migration of MIGRATIONS) {
+    if (migration.version > currentVersion) {
+      const sql = migration.sql.trim();
+      if (sql) {
+        db.exec(sql);
+      }
+      db
+        .prepare(
+          "INSERT INTO _migrations (version, name) VALUES ($version, $name)"
+        )
+        .run({
+          $version: migration.version,
+          $name: migration.name,
+        });
+    }
+  }
 }
 
 function initSchema(db: Database): void {

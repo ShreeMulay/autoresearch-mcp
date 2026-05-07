@@ -5,8 +5,48 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import z from "zod";
 import { logTechniqueOutcome } from "../db/experiments.js";
+import { getCatalogStats } from "../db/techniques.js";
 
 export function registerMetaTools(mcp: McpServer): void {
+	mcp.tool(
+		"get_server_info",
+		"Get autoresearch-mcp server metadata: version, catalog stats, and configuration.",
+		{},
+		async () => {
+			try {
+				const stats = getCatalogStats();
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify(
+								{
+									version: "0.3.0",
+									catalog: stats,
+									db_path:
+										process.env.AUTORESEARCH_DB_PATH ??
+										"default (data/autoresearch.db)",
+								},
+								null,
+								2
+							),
+						},
+					],
+				};
+			} catch (err) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `Failed to get server info: ${err instanceof Error ? err.message : String(err)}`,
+						},
+					],
+					isError: true,
+				};
+			}
+		}
+	);
+
 	mcp.tool(
 		"log_technique_outcome",
 		"Log the observed outcome of using a technique in a domain or project. " +
