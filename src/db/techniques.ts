@@ -122,9 +122,11 @@ export function searchCatalog(
   const db = getDb();
   const limit = options?.limit ?? 10;
 
-  // Sanitize query for FTS5 — remove special chars, wrap words with OR
+  // Sanitize query for FTS5 — escape special chars, wrap words with OR
+  // FTS5 special chars that can break MATCH: " * ( ) AND OR NOT NEAR ^ - ~
   const sanitized = query
-    .replace(/[^a-zA-Z0-9\s-]/g, " ")
+    .replace(/["*()^~\-]/g, " ")
+    .replace(/\b(AND|OR|NOT|NEAR)\b/gi, " ")
     .trim()
     .split(/\s+/)
     .filter((w) => w.length > 1)
