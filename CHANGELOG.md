@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Schema migrations** — `_migrations` table tracks schema versions. Future schema changes will apply automatically without breaking existing user databases.
 - **`get_server_info` tool** — returns `{version, catalog_stats, db_path}` for skill version handshake and debugging.
 - **Configurable DB path** — set `AUTORESEARCH_DB_PATH` environment variable to override default `data/autoresearch.db`.
-- **Explicit skill install CLI** — `npx autoresearch-install-skill` or `npx autoresearch-mcp install-skill` with `--target <platform>` and `--dry-run` flags.
+- **Explicit skill install CLI** — `npx -p autoresearch-mcp autoresearch-install-skill` or `autoresearch-mcp install-skill` with `--target <platform>` and `--dry-run` flags.
 - **Discovery tool tests** — `tests/db/techniques-sanitize.test.ts` covers 9 FTS5 edge cases (quotes, wildcards, parens, keywords, mixed).
 - **Schema migration tests** — `tests/db/schema.test.ts` verifies migrations table, idempotency, WAL mode, busy timeout, foreign keys.
 - **E2E integration test** — `tests/e2e/server.test.ts` spawns the MCP server process, sends JSON-RPC `initialize` and `tools/list`, verifies all expected tools are registered.

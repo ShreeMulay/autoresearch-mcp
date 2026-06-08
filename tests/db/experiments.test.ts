@@ -13,6 +13,33 @@ import {
 	updateExperiment,
 } from "../../src/db/experiments.js";
 import { resetDb } from "../../src/db/schema.js";
+import type { ExperimentSpec } from "../../src/types.js";
+
+function validSpec(overrides?: Partial<ExperimentSpec>): ExperimentSpec {
+	return {
+		target_artifact: "test.md",
+		artifact_type: "content",
+		mutation_strategy: "LLM edit",
+		evaluator_command: "bash eval.sh",
+		metric_name: "score",
+		metric_direction: "maximize",
+		acceptance_rule: "strict-improvement",
+		budget: {},
+		environment: {},
+		stopping_conditions: ["budget-exhaustion"],
+		risk_policy: {
+			network_denied: true,
+			requires_approval: false,
+			sandbox_only: false,
+			secrets_denied: true,
+		},
+		constraints: {
+			metric_ceilings: {},
+			metric_floors: {},
+		},
+		...overrides,
+	};
+}
 
 beforeEach(() => {
 	resetDb(":memory:");
@@ -22,7 +49,7 @@ describe("createExperiment + getExperiment", () => {
 	it("creates and retrieves an experiment", () => {
 		createExperiment({
 			id: "exp-001",
-			spec: JSON.stringify({ target_artifact: "test.md" }),
+			spec: validSpec(),
 			project_path: "/test",
 			project_name: "Test Project",
 			status: "scaffolded",
@@ -46,7 +73,7 @@ describe("createExperiment + getExperiment", () => {
 	it("defaults status to scaffolded", () => {
 		createExperiment({
 			id: "exp-002",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 		});
 
@@ -59,7 +86,7 @@ describe("updateExperiment", () => {
 	it("updates status and timestamps", () => {
 		createExperiment({
 			id: "exp-003",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 		});
 
@@ -73,7 +100,7 @@ describe("updateExperiment", () => {
 	it("updates scores and cost", () => {
 		createExperiment({
 			id: "exp-004",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 		});
 
@@ -103,7 +130,7 @@ describe("updateExperiment", () => {
 	it("updates notes", () => {
 		createExperiment({
 			id: "exp-005",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 		});
 
@@ -118,7 +145,7 @@ describe("logExperimentResult", () => {
 	it("logs a result and updates aggregates", () => {
 		createExperiment({
 			id: "exp-006",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 		});
 
@@ -145,7 +172,7 @@ describe("logExperimentResult", () => {
 	it("tracks best_score correctly across multiple iterations", () => {
 		createExperiment({
 			id: "exp-007",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 		});
 
@@ -185,7 +212,7 @@ describe("logExperimentResult", () => {
 	it("accumulates cost across iterations", () => {
 		createExperiment({
 			id: "exp-008",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 		});
 
@@ -220,7 +247,7 @@ describe("logExperimentResult", () => {
 	it("can retrieve results for an experiment", () => {
 		createExperiment({
 			id: "exp-009",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 		});
 
@@ -251,7 +278,7 @@ describe("logExperimentResult", () => {
 	it("returns empty results for experiment with no results", () => {
 		createExperiment({
 			id: "exp-010",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 		});
 
@@ -264,13 +291,13 @@ describe("listExperiments", () => {
 	it("lists all experiments", () => {
 		createExperiment({
 			id: "exp-a",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/project-a",
 			project_name: "Project A",
 		});
 		createExperiment({
 			id: "exp-b",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/project-b",
 			project_name: "Project B",
 		});
@@ -282,13 +309,13 @@ describe("listExperiments", () => {
 	it("filters by status", () => {
 		createExperiment({
 			id: "exp-c",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 			status: "scaffolded",
 		});
 		createExperiment({
 			id: "exp-d",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 			status: "running",
 		});
@@ -301,13 +328,13 @@ describe("listExperiments", () => {
 	it("filters by project name", () => {
 		createExperiment({
 			id: "exp-e",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/foo/bar",
 			project_name: "FooBar",
 		});
 		createExperiment({
 			id: "exp-f",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/baz/qux",
 			project_name: "BazQux",
 		});
@@ -320,12 +347,12 @@ describe("listExperiments", () => {
 	it("filters by project path", () => {
 		createExperiment({
 			id: "exp-g",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/projects/alpha",
 		});
 		createExperiment({
 			id: "exp-h",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/projects/beta",
 		});
 
@@ -337,17 +364,17 @@ describe("listExperiments", () => {
 	it("respects limit", () => {
 		createExperiment({
 			id: "exp-i",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 		});
 		createExperiment({
 			id: "exp-j",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 		});
 		createExperiment({
 			id: "exp-k",
-			spec: JSON.stringify({}),
+			spec: validSpec(),
 			project_path: "/test",
 		});
 

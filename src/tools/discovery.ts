@@ -38,6 +38,9 @@ export function registerDiscoveryTools(mcp: McpServer): void {
 				.describe("Filter by tags (AND logic)"),
 			limit: z
 				.number()
+				.int()
+				.min(1)
+				.max(50)
 				.optional()
 				.default(10)
 				.describe("Max results to return"),
@@ -51,9 +54,9 @@ export function registerDiscoveryTools(mcp: McpServer): void {
 					items = listCatalogItems({ layer, tags, limit });
 				} else {
 					// Search mode — use FTS5
-					items = searchCatalog(query, { layer, limit });
+					items = searchCatalog(query, { layer, tags, limit });
 
-					// If FTS returns nothing, fallback to listing with tag filter
+					// If FTS returns nothing, fallback to exact tag/layer listing.
 					if (items.length === 0 && tags?.length) {
 						items = listCatalogItems({ layer, tags, limit });
 					}

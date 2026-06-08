@@ -5,7 +5,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import z from "zod";
 import { logTechniqueOutcome } from "../db/experiments.js";
+import { getDbPath } from "../db/schema.js";
 import { getCatalogStats } from "../db/techniques.js";
+import { VERSION } from "../version.js";
 
 export function registerMetaTools(mcp: McpServer): void {
 	mcp.tool(
@@ -21,14 +23,12 @@ export function registerMetaTools(mcp: McpServer): void {
 							type: "text" as const,
 							text: JSON.stringify(
 								{
-									version: "0.3.0",
+									version: VERSION,
 									catalog: stats,
-									db_path:
-										process.env.AUTORESEARCH_DB_PATH ??
-										"default (data/autoresearch.db)",
+									db_path: getDbPath(),
 								},
 								null,
-								2
+								2,
 							),
 						},
 					],
@@ -44,7 +44,7 @@ export function registerMetaTools(mcp: McpServer): void {
 					isError: true,
 				};
 			}
-		}
+		},
 	);
 
 	mcp.tool(
@@ -52,7 +52,9 @@ export function registerMetaTools(mcp: McpServer): void {
 		"Log the observed outcome of using a technique in a domain or project. " +
 			"Use this to accumulate meta-learning data about which approaches work, partially work, fail, or get abandoned.",
 		{
-			technique_id: z.string().describe("Technique ID used in the experiment or project"),
+			technique_id: z
+				.string()
+				.describe("Technique ID used in the experiment or project"),
 			domain: z.string().describe("Domain where the technique was applied"),
 			outcome: z
 				.enum(["success", "partial", "failed", "abandoned"])

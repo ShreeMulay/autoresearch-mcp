@@ -8,7 +8,12 @@ import {
 	logExperimentResult,
 	updateExperiment,
 } from "../db/experiments.js";
-import type { Experiment, ExperimentResult, ExperimentSpec } from "../types.js";
+import {
+	type Experiment,
+	type ExperimentResult,
+	type ExperimentSpec,
+	RecipeId,
+} from "../types.js";
 
 export function registerExperimentTools(mcp: McpServer): void {
 	mcp.tool(
@@ -30,7 +35,7 @@ export function registerExperimentTools(mcp: McpServer): void {
 				.string()
 				.default("LLM edit")
 				.describe("How mutations are proposed"),
-			recipe_id: z.string().optional().describe("Optional recipe ID"),
+			recipe_id: RecipeId.optional().describe("Optional recipe ID"),
 			notes: z.string().optional().describe("Optional experiment notes"),
 		},
 		async ({
@@ -57,7 +62,7 @@ export function registerExperimentTools(mcp: McpServer): void {
 
 				createExperiment({
 					id: experimentId,
-					spec: JSON.stringify(spec),
+					spec,
 					project_path,
 					project_name,
 					status: "scaffolded",
@@ -403,14 +408,14 @@ function buildExperimentSpec(args: {
 	metricDirection: "minimize" | "maximize";
 	evaluatorCommand: string;
 	mutationStrategy: string;
-	recipeId?: string;
+	recipeId?: ExperimentSpec["recipe_id"];
 }): ExperimentSpec {
 	return {
 		target_artifact: args.targetArtifact,
 		artifact_type: inferArtifactType(args.targetArtifact),
 		...(args.recipeId
 			? {
-					recipe_id: args.recipeId as ExperimentSpec["recipe_id"],
+					recipe_id: args.recipeId,
 				}
 			: {}),
 		mutation_strategy: args.mutationStrategy,

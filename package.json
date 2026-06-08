@@ -29,10 +29,11 @@
     "claude-code"
   ],
   "bin": {
-    "autoresearch-mcp": "./src/index.ts",
-    "autoresearch-install-skill": "./scripts/install-skill.js"
+    "autoresearch-mcp": "./bin/autoresearch-mcp",
+    "autoresearch-install-skill": "./bin/autoresearch-install-skill"
   },
   "files": [
+    "bin/",
     "src/",
     "catalog/",
     "skills/",
@@ -49,19 +50,19 @@
     "build": "bun build src/index.ts --outdir dist --target bun",
     "start": "bun run src/index.ts",
     "test": "bun test",
-    "lint": "bunx biome check src/ tests/",
+    "lint": "bunx biome check src/ tests/ scripts/ bin/",
     "typecheck": "bunx tsc --noEmit",
     "load-catalog": "bun run src/db/load-catalog.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
     "yaml": "^2.7.0",
-    "zod": "^4.4.3"
+    "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.14",
+    "@biomejs/biome": "^1.9.0",
     "@types/bun": "latest",
-    "typescript": "^6.0.3"
+    "typescript": "^5.7.0"
   },
   "engines": {
     "bun": ">=1.0.0"

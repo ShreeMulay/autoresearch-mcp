@@ -2,9 +2,9 @@
  * Tests for FTS5 input sanitization in searchCatalog.
  */
 
-import { describe, it, expect, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { resetDb } from "../../src/db/schema.js";
-import { upsertCatalogItem, searchCatalog } from "../../src/db/techniques.js";
+import { searchCatalog, upsertCatalogItem } from "../../src/db/techniques.js";
 import type { CatalogItem } from "../../src/types.js";
 
 function makeItem(id: string, overrides?: Partial<CatalogItem>): CatalogItem {
@@ -31,7 +31,7 @@ describe("FTS5 sanitization", () => {
 		upsertCatalogItem(
 			makeItem("s1", { description: 'optimize "prompts" with quotes' }),
 			"h1",
-			"y1"
+			"y1",
 		);
 		const results = searchCatalog('"prompts"');
 		// Should not throw — may return 0 results due to stripping
@@ -42,7 +42,7 @@ describe("FTS5 sanitization", () => {
 		upsertCatalogItem(
 			makeItem("s2", { description: "optimize prompts* with wildcard" }),
 			"h2",
-			"y2"
+			"y2",
 		);
 		const results = searchCatalog("prompts*");
 		expect(Array.isArray(results)).toBe(true);
@@ -52,7 +52,7 @@ describe("FTS5 sanitization", () => {
 		upsertCatalogItem(
 			makeItem("s3", { description: "optimize (prompts) with parens" }),
 			"h3",
-			"y3"
+			"y3",
 		);
 		const results = searchCatalog("(prompts)");
 		expect(Array.isArray(results)).toBe(true);
@@ -62,7 +62,7 @@ describe("FTS5 sanitization", () => {
 		upsertCatalogItem(
 			makeItem("s4", { description: "optimize prompts AND code" }),
 			"h4",
-			"y4"
+			"y4",
 		);
 		const results = searchCatalog("prompts AND code");
 		expect(Array.isArray(results)).toBe(true);
@@ -72,7 +72,7 @@ describe("FTS5 sanitization", () => {
 		upsertCatalogItem(
 			makeItem("s5", { description: "optimize prompts NEAR code" }),
 			"h5",
-			"y5"
+			"y5",
 		);
 		const results = searchCatalog("prompts NEAR code");
 		expect(Array.isArray(results)).toBe(true);
@@ -82,7 +82,7 @@ describe("FTS5 sanitization", () => {
 		upsertCatalogItem(
 			makeItem("s6", { description: "optimize ^prompts~ with special" }),
 			"h6",
-			"y6"
+			"y6",
 		);
 		const results = searchCatalog("^prompts~");
 		expect(Array.isArray(results)).toBe(true);
@@ -92,7 +92,7 @@ describe("FTS5 sanitization", () => {
 		upsertCatalogItem(
 			makeItem("s7", { description: "optimize prompts-with-hyphens" }),
 			"h7",
-			"y7"
+			"y7",
 		);
 		const results = searchCatalog("prompts-with-hyphens");
 		expect(Array.isArray(results)).toBe(true);
@@ -102,7 +102,7 @@ describe("FTS5 sanitization", () => {
 		upsertCatalogItem(
 			makeItem("s8", { description: "optimize *ALL* (prompts) AND code" }),
 			"h8",
-			"y8"
+			"y8",
 		);
 		const results = searchCatalog("*ALL* (prompts) AND code");
 		expect(Array.isArray(results)).toBe(true);
@@ -112,7 +112,7 @@ describe("FTS5 sanitization", () => {
 		upsertCatalogItem(
 			makeItem("s9", { description: "optimize prompts for better results" }),
 			"h9",
-			"y9"
+			"y9",
 		);
 		const results = searchCatalog("optimize prompts");
 		expect(results.length).toBeGreaterThanOrEqual(1);

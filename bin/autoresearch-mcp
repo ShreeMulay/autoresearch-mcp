@@ -1,0 +1,24 @@
+#!/usr/bin/env bun
+
+const [, , command, ...args] = process.argv;
+
+if (command === "install-skill") {
+	const { installSkill } = await import("../scripts/install-skill.js");
+	await installSkill(args);
+	process.exit(0);
+}
+
+if (command === "--help" || command === "-h") {
+	console.log(`autoresearch-mcp
+
+Usage:
+  autoresearch-mcp                  Start the MCP server over stdio
+  autoresearch-mcp install-skill    Install the bundled autoresearch skill
+
+Options:
+  -h, --help                        Show this help text`);
+	process.exit(0);
+}
+
+const { main } = await import("../src/index.ts");
+await main();
