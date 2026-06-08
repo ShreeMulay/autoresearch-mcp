@@ -39,7 +39,21 @@ jobs:
         run: bunx tsc --noEmit
 
       - name: Lint
-        run: bunx biome check src/
+        run: bun run lint
 
       - name: Test
         run: bun test
+
+      - name: Package smoke
+        run: |
+          node --check scripts/install-skill.js
+          node bin/autoresearch-install-skill --dry-run --target claude
+          bun bin/autoresearch-mcp --help
+          bun bin/autoresearch-mcp install-skill --dry-run --target opencode
+          bun pm pack
+          TMP_DIR=$(mktemp -d)
+          bun init -y "$TMP_DIR"
+          bun add "$PWD/autoresearch-mcp-0.3.0.tgz" --cwd "$TMP_DIR"
+          "$TMP_DIR/node_modules/.bin/autoresearch-mcp" --help
+          "$TMP_DIR/node_modules/.bin/autoresearch-install-skill" --dry-run --target opencode
+          rm -rf "$TMP_DIR" autoresearch-mcp-0.3.0.tgz

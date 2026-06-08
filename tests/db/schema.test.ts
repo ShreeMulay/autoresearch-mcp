@@ -2,9 +2,9 @@
  * Tests for SQLite schema migrations.
  */
 
-import { describe, it, expect, beforeEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { resetDb, getDb } from "../../src/db/schema.js";
+import { beforeEach, describe, expect, it } from "bun:test";
+import { getDb, resetDb } from "../../src/db/schema.js";
 
 beforeEach(() => {
 	resetDb(":memory:");
@@ -15,7 +15,7 @@ describe("Schema migrations", () => {
 		const db = getDb();
 		const tables = db
 			.prepare(
-				"SELECT name FROM sqlite_master WHERE type='table' AND name='_migrations'"
+				"SELECT name FROM sqlite_master WHERE type='table' AND name='_migrations'",
 			)
 			.all() as { name: string }[];
 		expect(tables.length).toBe(1);
@@ -35,18 +35,18 @@ describe("Schema migrations", () => {
 	it("is idempotent — re-running getDb() does not duplicate migrations", () => {
 		const db1 = getDb();
 		const count1 = (
-			db1
-				.prepare("SELECT COUNT(*) as count FROM _migrations")
-				.get() as { count: number }
+			db1.prepare("SELECT COUNT(*) as count FROM _migrations").get() as {
+				count: number;
+			}
 		).count;
 
 		// Simulate re-opening by resetting and re-getting
 		resetDb(":memory:");
 		const db2 = getDb();
 		const count2 = (
-			db2
-				.prepare("SELECT COUNT(*) as count FROM _migrations")
-				.get() as { count: number }
+			db2.prepare("SELECT COUNT(*) as count FROM _migrations").get() as {
+				count: number;
+			}
 		).count;
 
 		expect(count2).toBe(count1);
@@ -56,7 +56,7 @@ describe("Schema migrations", () => {
 		const db = getDb();
 		const tables = db
 			.prepare(
-				"SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+				"SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
 			)
 			.all() as { name: string }[];
 		const tableNames = tables.map((t) => t.name);
@@ -109,12 +109,12 @@ describe("Configurable DB path", () => {
 			db.prepare("CREATE TABLE IF NOT EXISTS test_env (id INTEGER)").run();
 			const tables = db
 				.prepare(
-					"SELECT name FROM sqlite_master WHERE type='table' AND name='test_env'"
+					"SELECT name FROM sqlite_master WHERE type='table' AND name='test_env'",
 				)
 				.all() as { name: string }[];
 			expect(tables.length).toBe(1);
 		} finally {
-			delete process.env.AUTORESEARCH_DB_PATH;
+			Reflect.deleteProperty(process.env, "AUTORESEARCH_DB_PATH");
 			// Clean up
 			try {
 				const fs = await import("node:fs/promises");

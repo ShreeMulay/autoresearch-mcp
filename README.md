@@ -36,9 +36,11 @@ bunx autoresearch-mcp
 #### OpenCode
 
 ```bash
-# Auto-install via npm postinstall script (run after npm install)
-# Or manual symlink:
-ln -s $(npm root -g)/autoresearch-mcp/skills/autoresearch ~/.opencode/skills/autoresearch
+# Install the bundled skill into ~/.opencode/skills/autoresearch
+npx -p autoresearch-mcp autoresearch-install-skill --target opencode
+
+# If autoresearch-mcp is already installed globally:
+autoresearch-mcp install-skill --target opencode
 ```
 
 Skills are auto-discovered from `~/.opencode/skills/`. The skill lazy-loads when your agent encounters optimization problems.
@@ -46,7 +48,7 @@ Skills are auto-discovered from `~/.opencode/skills/`. The skill lazy-loads when
 #### Claude Code
 
 ```bash
-ln -s $(npm root -g)/autoresearch-mcp/skills/autoresearch ~/.claude/skills/autoresearch
+npx -p autoresearch-mcp autoresearch-install-skill --target claude
 ```
 
 #### pi.dev
@@ -54,6 +56,8 @@ ln -s $(npm root -g)/autoresearch-mcp/skills/autoresearch ~/.claude/skills/autor
 ```bash
 pi --skill $(npm root -g)/autoresearch-mcp/skills/autoresearch/SKILL.md
 ```
+
+The installer copies skill files by default so `npx` temporary package caches do not leave broken symlinks. Use `--dry-run` to preview changes or `--overwrite` to replace an existing skill directory.
 
 ### Install as MCP Server (Machinery)
 

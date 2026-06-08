@@ -29,10 +29,11 @@
     "claude-code"
   ],
   "bin": {
-    "autoresearch-mcp": "./src/index.ts",
-    "autoresearch-install-skill": "./scripts/install-skill.js"
+    "autoresearch-mcp": "./bin/autoresearch-mcp",
+    "autoresearch-install-skill": "./bin/autoresearch-install-skill"
   },
   "files": [
+    "bin/",
     "src/",
     "catalog/",
     "skills/",
@@ -49,7 +50,7 @@
     "build": "bun build src/index.ts --outdir dist --target bun",
     "start": "bun run src/index.ts",
     "test": "bun test",
-    "lint": "bunx biome check src/ tests/",
+    "lint": "bunx biome check src/ tests/ scripts/ bin/",
     "typecheck": "bunx tsc --noEmit",
     "load-catalog": "bun run src/db/load-catalog.ts"
   },

@@ -1,10 +1,23 @@
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import {
+	access,
+	chmod,
+	lstat,
+	mkdir,
+	readFile,
+	writeFile,
+} from "node:fs/promises";
+import { join, resolve, sep } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import z from "zod";
 import { createExperiment } from "../db/experiments.js";
 import { getCatalogItem } from "../db/techniques.js";
-import type { CatalogItem, ExperimentSpec } from "../types.js";
+import { type CatalogItem, type ExperimentSpec, RecipeId } from "../types.js";
+
+const ALLOWED_TEMPLATE_NAMES = new Set([
+	"program.md",
+	"eval.sh",
+	"results.tsv",
+]);
 
 export function registerScaffoldingTools(mcp: McpServer): void {
 	mcp.tool(
@@ -24,6 +37,10 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 				.string()
 				.optional()
 				.describe("Optional additional instructions for the program"),
+			overwrite: z
+				.boolean()
+				.default(false)
+				.describe("Overwrite existing autoresearch scaffold files"),
 		},
 		async ({
 			recipe_id,
@@ -31,6 +48,7 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 			metric_name,
 			target_file,
 			custom_instructions,
+			overwrite,
 		}) => {
 			try {
 				const recipe = getCatalogItem(recipe_id);
@@ -55,7 +73,12 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 				const evalPath = join(autoresearchDir, "eval.sh");
 				const resultsPath = join(autoresearchDir, "results.tsv");
 
+				await ensureSafeScaffoldDirectory(autoresearchDir);
 				await mkdir(autoresearchDir, { recursive: true });
+				await ensureScaffoldFilesWritable(
+					[programPath, evalPath, resultsPath],
+					overwrite,
+				);
 
 				const targetArtifact = resolveTargetArtifact(
 					resolvedProjectPath,
@@ -73,6 +96,7 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 				await writeFile(programPath, programContent, "utf8");
 				await writeFile(evalPath, evalContent, "utf8");
 				await writeFile(resultsPath, resultsContent, "utf8");
+				await makeEvalExecutable(evalPath);
 
 				const experimentId = crypto.randomUUID();
 				const spec = buildScaffoldExperimentSpec({
@@ -84,7 +108,7 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 
 				createExperiment({
 					id: experimentId,
-					spec: JSON.stringify(spec),
+					spec,
 					project_path: resolvedProjectPath,
 					project_name: getProjectName(resolvedProjectPath),
 					status: "scaffolded",
@@ -138,12 +162,7 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 					};
 				}
 
-				const templatePath = resolve(
-					import.meta.dir,
-					"../../catalog/templates",
-					recipe_id,
-					template_name,
-				);
+				const templatePath = resolveTemplatePath(recipe_id, template_name);
 
 				try {
 					await access(templatePath);
@@ -298,7 +317,7 @@ function buildScaffoldExperimentSpec(args: {
 	return {
 		target_artifact: args.targetArtifact,
 		artifact_type: inferArtifactType(args.targetArtifact),
-		recipe_id: args.recipeId as ExperimentSpec["recipe_id"],
+		recipe_id: RecipeId.parse(args.recipeId),
 		mutation_strategy: "LLM edit",
 		evaluator_command: args.evaluatorCommand,
 		metric_name: args.metricName,
@@ -318,6 +337,118 @@ function buildScaffoldExperimentSpec(args: {
 			metric_ceilings: {},
 		},
 	};
+}
+
+export function assertAllowedTemplateName(templateName: string): void {
+	if (!ALLOWED_TEMPLATE_NAMES.has(templateName)) {
+		throw new Error(
+			joinText(
+				"Unsupported template: ",
+				templateName,
+				". Valid templates: ",
+				Array.from(ALLOWED_TEMPLATE_NAMES).join(", "),
+			),
+		);
+	}
+}
+
+export function resolveTemplatePath(
+	recipeId: string,
+	templateName: string,
+): string {
+	assertAllowedTemplateName(templateName);
+
+	const templateRoot = resolve(
+		import.meta.dir,
+		"../../catalog/templates",
+		recipeId,
+	);
+	const templatePath = resolve(templateRoot, templateName);
+
+	if (templatePath !== join(templateRoot, templateName)) {
+		throw new Error("Template path escapes recipe template directory");
+	}
+
+	if (!templatePath.startsWith(`${templateRoot}${sep}`)) {
+		throw new Error("Template path escapes recipe template directory");
+	}
+
+	return templatePath;
+}
+
+export async function ensureScaffoldFilesWritable(
+	paths: string[],
+	overwrite: boolean,
+): Promise<void> {
+	for (const path of paths) {
+		try {
+			const stat = await lstat(path);
+			if (stat.isSymbolicLink()) {
+				throw new Error(
+					joinText("Refusing to write scaffold file through symlink: ", path),
+				);
+			}
+
+			if (overwrite) {
+				continue;
+			}
+
+			throw new Error(
+				joinText(
+					"Scaffold file already exists: ",
+					path,
+					". Re-run with overwrite=true to replace it.",
+				),
+			);
+		} catch (error) {
+			if (isNotFoundError(error)) {
+				continue;
+			}
+
+			if (
+				error instanceof Error &&
+				(error.message.includes("already exists") ||
+					error.message.includes("through symlink"))
+			) {
+				throw error;
+			}
+
+			throw error;
+		}
+	}
+}
+
+export async function ensureSafeScaffoldDirectory(path: string): Promise<void> {
+	try {
+		const stat = await lstat(path);
+		if (stat.isSymbolicLink()) {
+			throw new Error(
+				joinText("Refusing to scaffold through symlinked directory: ", path),
+			);
+		}
+
+		if (!stat.isDirectory()) {
+			throw new Error(joinText("Scaffold path is not a directory: ", path));
+		}
+	} catch (error) {
+		if (isNotFoundError(error)) {
+			return;
+		}
+
+		throw error;
+	}
+}
+
+export async function makeEvalExecutable(evalPath: string): Promise<void> {
+	await chmod(evalPath, 0o755);
+}
+
+function isNotFoundError(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		"code" in error &&
+		(error as { code?: unknown }).code === "ENOENT"
+	);
 }
 
 function getStrategyHints(recipe: CatalogItem): string[] {

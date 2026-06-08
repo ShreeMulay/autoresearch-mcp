@@ -2,7 +2,7 @@
  * E2E integration test: spawn the MCP server and verify it responds.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 
@@ -46,7 +46,7 @@ describe("MCP Server E2E", () => {
 		// Wait a moment for server to start
 		await new Promise((r) => setTimeout(r, 500));
 
-		child.stdin?.write(JSON.stringify(initRequest) + "\n");
+		child.stdin?.write(`${JSON.stringify(initRequest)}\n`);
 
 		// Wait for response
 		await new Promise((r) => setTimeout(r, 500));
@@ -89,7 +89,7 @@ describe("MCP Server E2E", () => {
 			params: {},
 		};
 
-		child.stdin?.write(JSON.stringify(request) + "\n");
+		child.stdin?.write(`${JSON.stringify(request)}\n`);
 		await new Promise((r) => setTimeout(r, 500));
 
 		const lines = stdoutBuffer.trim().split("\n");
@@ -104,7 +104,7 @@ describe("MCP Server E2E", () => {
 
 					// Verify expected tools exist
 					const toolNames = msg.result.tools.map(
-						(t: { name: string }) => t.name
+						(t: { name: string }) => t.name,
 					);
 					expect(toolNames).toContain("search_techniques");
 					expect(toolNames).toContain("get_technique");

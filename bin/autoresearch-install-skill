@@ -1,0 +1,5 @@
+#!/usr/bin/env node
+
+import { installSkill } from "../scripts/install-skill.js";
+
+await installSkill();
