@@ -38,7 +38,7 @@ function hashContent(content: string): string {
  * Load all YAML catalog files into SQLite.
  * Uses content hashing to skip unchanged files.
  */
-export async function loadCatalog(): Promise<{
+export async function loadCatalog(catalogDir = CATALOG_ROOT): Promise<{
 	loaded: number;
 	skipped: number;
 	errors: string[];
@@ -52,7 +52,7 @@ export async function loadCatalog(): Promise<{
 	getDb();
 
 	for (const [layer, dirName] of Object.entries(LAYER_DIRS)) {
-		const dirPath = join(CATALOG_ROOT, dirName);
+		const dirPath = join(catalogDir, dirName);
 
 		let files: string[];
 		try {
@@ -62,9 +62,9 @@ export async function loadCatalog(): Promise<{
 			continue;
 		}
 
-		const yamlFiles = files.filter(
-			(f) => f.endsWith(".yaml") || f.endsWith(".yml"),
-		);
+		const yamlFiles = files
+			.filter((f) => f.endsWith(".yaml") || f.endsWith(".yml"))
+			.sort();
 
 		for (const file of yamlFiles) {
 			const filePath = join(dirPath, file);
@@ -78,6 +78,18 @@ export async function loadCatalog(): Promise<{
 
 				if (!id) {
 					errors.push(`Missing 'id' field in ${filePath}`);
+					continue;
+				}
+				if (seenIds.has(id)) {
+					errors.push(`duplicate catalog id ${id} in ${filePath}`);
+					continue;
+				}
+
+				const declaredLayer = raw.layer;
+				if (typeof declaredLayer === "string" && declaredLayer !== layer) {
+					errors.push(
+						`Catalog item ${id} declares layer ${declaredLayer} but is in ${layer}: ${filePath}`,
+					);
 					continue;
 				}
 				seenIds.add(id);

@@ -4,7 +4,7 @@ An MCP server that brings Andrej Karpathy's autoresearch pattern to every AI cod
 
 ## What is Autoresearch?
 
-Autoresearch is a simple but powerful pattern popularized by [Andrej Karpathy's autoresearch project](https://github.com/karpathy/autoresearch), a repository with 64,945 stars at the time of this release: give an AI agent a real experiment setup, let it modify code, prompts, or configs, run a fixed-time experiment, check whether the target metric improved, keep or discard the change, and repeat.
+Autoresearch is a simple but powerful pattern popularized by [Andrej Karpathy's autoresearch project](https://github.com/karpathy/autoresearch), one of the most-starred AI research repositories on GitHub: give an AI agent a real experiment setup, let it modify code, prompts, or configs, run a fixed-time experiment, check whether the target metric improved, keep or discard the change, and repeat.
 
 In Karpathy's framing, that can mean roughly 12 experiments per hour and around 100 overnight. The important idea is broader than any one implementation: if you have a measurable metric, you can ratchet toward better results.
 
@@ -14,18 +14,29 @@ This project is inspired by Karpathy's work, but it is not affiliated with his p
 
 ## Quick Start
 
-Requirements:
+Runtime requirements:
 
-- Bun installed locally
+- MCP server (`autoresearch-mcp`): requires [Bun](https://bun.sh), because the server uses `bun:sqlite`
+- Skill installer (`autoresearch-install-skill`): requires Node.js >= 20.19, no Bun needed
 - Any MCP-compatible client such as Claude Code or OpenCode
 
-Install globally:
+Install globally (puts both commands on your PATH):
 
 ```bash
 npm install -g autoresearch-mcp
-# OR
-bunx autoresearch-mcp
 ```
+
+Or run without a global install:
+
+```bash
+# Start the MCP server (requires Bun)
+bunx autoresearch-mcp
+
+# Install the bundled skill (works with Node alone)
+npx -p autoresearch-mcp autoresearch-install-skill
+```
+
+Note: `npm install -g` succeeds on a machine without Bun, but the `autoresearch-mcp` server command will not run until Bun is installed. The skill installer runs on Node alone.
 
 ### Install as Skill (Recommended)
 
@@ -39,7 +50,8 @@ bunx autoresearch-mcp
 # Install the bundled skill into ~/.opencode/skills/autoresearch
 npx -p autoresearch-mcp autoresearch-install-skill --target opencode
 
-# If autoresearch-mcp is already installed globally:
+# If autoresearch-mcp is already installed globally (requires Bun;
+# on Node-only machines use autoresearch-install-skill instead):
 autoresearch-mcp install-skill --target opencode
 ```
 
@@ -173,7 +185,7 @@ Recipes compose a strategy, evaluator, and execution pattern into a ready-to-use
 
 ## MCP Tools
 
-The server exposes 11 MCP tools.
+The server exposes 12 MCP tools.
 
 | Tool | Description |
 | --- | --- |
@@ -187,6 +199,7 @@ The server exposes 11 MCP tools.
 | `list_experiments` | List experiments filtered by status or project. |
 | `scaffold_experiment` | Generate `program.md`, `eval.sh`, and `results.tsv` from a recipe. |
 | `get_template` | Return a recipe template file. |
+| `get_server_info` | Return server version, catalog stats, and the active database path. |
 | `log_technique_outcome` | Record what worked for cross-project meta-learning. |
 
 ## Usage Examples

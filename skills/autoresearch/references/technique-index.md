@@ -91,29 +91,29 @@ Strategy: hill-climbing | Evaluator: llm-as-judge | Pattern: single-ratchet
 Optimize system prompts or few-shot examples. Fast iterations, quality judged by LLM.
 
 ### code-performance
-Strategy: bayesian-optimization | Evaluator: benchmark-harness | Pattern: single-ratchet
-Optimize code for speed or memory. Benchmark-driven, regression-safe.
+Strategy: hill-climbing | Evaluator: benchmark-harness | Pattern: branch-and-merge
+Optimize code for speed or memory. Benchmark-driven, branch-isolated.
 
 ### ml-training
-Strategy: evolutionary | Evaluator: cost-latency-evaluator | Pattern: bounded-episode
-Tune hyperparameters with multi-objective eval. Budget-aware.
+Strategy: hill-climbing | Evaluator: benchmark-harness | Pattern: single-ratchet
+Tune training code or hyperparameters with repeatable benchmark evaluation.
 
 ### content-revision
-Strategy: self-refine | Evaluator: rubric-scorer | Pattern: single-ratchet
-Iterate on articles, docs, emails. Structured quality scoring.
+Strategy: hill-climbing | Evaluator: rubric-scorer | Pattern: two-loop
+Iterate on articles, docs, emails. Batch-level rubric scoring.
 
 ### config-tuning
 Strategy: bayesian-optimization | Evaluator: benchmark-harness | Pattern: single-ratchet
 Optimize JSON/YAML/TOML configs. Small search space, expensive eval.
 
 ### test-amplification
-Strategy: evolutionary | Evaluator: regression-detector | Pattern: bounded-episode
-Generate tests to find edge cases. Must not break existing tests.
+Strategy: hill-climbing | Evaluator: benchmark-harness | Pattern: single-ratchet
+Generate tests to find edge cases. Benchmark-driven strict improvement.
 
 ### general-ratchet
-Strategy: hill-climbing | Evaluator: llm-as-judge | Pattern: single-ratchet
+Strategy: hill-climbing | Evaluator: benchmark-harness | Pattern: single-ratchet
 Default recipe when domain is unclear. Safe, flexible starting point.
 
 ### literature-synthesis
-Strategy: beam-search | Evaluator: rubric-scorer | Pattern: two-loop
+Strategy: self-refine | Evaluator: rubric-scorer | Pattern: two-loop
 Research synthesis from multiple papers. Structured extraction + scoring.

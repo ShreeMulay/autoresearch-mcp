@@ -271,6 +271,7 @@ export const ExperimentResultSchema = z.object({
 	iteration: z.number(),
 	score: z.number(),
 	improved: z.boolean(),
+	is_baseline: z.boolean().default(false),
 	change_description: z.string().describe("What was tried in this iteration"),
 	duration_seconds: z.number().optional(),
 	cost_tokens: z.number().optional(),

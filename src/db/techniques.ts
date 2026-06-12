@@ -120,9 +120,13 @@ export function searchCatalog(
 	const db = getDb();
 	const limit = normalizeLimit(options?.limit ?? 10);
 
-	const sanitized = buildFtsQuery(query);
+	const sanitized = toFtsQuery(query);
 
 	if (!sanitized) {
+		if (query.trim() !== "") {
+			return [];
+		}
+
 		return listCatalogItems({
 			layer: options?.layer,
 			tags: options?.tags,
@@ -158,7 +162,7 @@ function normalizeLimit(limit: number): number {
 	return Math.max(1, Math.min(50, Math.trunc(limit)));
 }
 
-function buildFtsQuery(query: string): string {
+export function toFtsQuery(query: string): string {
 	const tokens = query.normalize("NFKC").match(/[\p{L}\p{N}_]+/gu) ?? [];
 	const reserved = new Set(["and", "or", "not", "near"]);
 

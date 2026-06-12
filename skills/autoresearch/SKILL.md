@@ -46,32 +46,32 @@ A single number that defines success (accuracy, latency, score, cost, conversion
 
 ### Q2: How long can one experiment take?
 
-- **< 1 minute** → Hill-climbing or evolutionary (many iterations fast)
-- **1-60 minutes** → Beam-search or Bayesian optimization (fewer, smarter iterations)
-- **> 1 hour or overnight** → Prompt-optimization, tree-search, or multi-armed-bandit
+- **< 1 minute** → hill-climbing or evolutionary (many iterations fast)
+- **1-60 minutes** → beam-search or bayesian-optimization (fewer, smarter iterations)
+- **> 1 hour or overnight** → prompt-optimization, beam-search, or multi-armed-bandit
 
 ### Q3: Batch or single?
 
-- **Single artifact** (one prompt, one function) → Single-ratchet or self-refine
-- **Batch of related items** (100 articles, 50 records) → Two-loop (outer strategy + inner batch)
-- **Continuous stream** → Champion-challenger or multi-armed-bandit
+- **Single artifact** (one prompt, one function) → single-ratchet or self-refine
+- **Batch of related items** (100 articles, 50 records) → two-loop (outer strategy + inner batch)
+- **Continuous stream** → champion-challenger or multi-armed-bandit
 
 ### Q4: Human in the loop?
 
 - **Fully autonomous** → Any ratchet pattern with automated evaluator
-- **Human approves each change** → Human-approval-gate evaluator
-- **Human judges final output** → LLM-as-judge or pairwise-comparison
+- **Human approves each change** → human-approval-gate evaluator
+- **Human judges final output** → llm-as-judge or pairwise-comparison
 
 ### Q5: Domain-specific defaults
 
 | Domain | Default Recipe | Why |
 |--------|---------------|-----|
 | Prompt engineering | prompt-optimization | Natural language mutations, fast eval |
-| Code performance | code-performance | Benchmark harness, regression detector |
-| ML training | ml-training | Cost/latency eval, bounded episodes |
-| Content revision | content-revision | LLM-as-judge, iterative refinement |
+| Code performance | code-performance | Benchmark harness, branch-and-merge |
+| ML training | ml-training | Benchmark harness, single-ratchet |
+| Content revision | content-revision | Rubric scorer, two-loop |
 | Configuration tuning | config-tuning | Bayesian optimization, small search space |
-| Test amplification | test-amplification | Regression detector, strict improvement |
+| Test amplification | test-amplification | Benchmark harness, single-ratchet |
 | General (unsure) | general-ratchet | Safe defaults, flexible composition |
 
 ## Core Workflows
@@ -119,10 +119,12 @@ For problems that can run while you sleep.
 | Browse catalog | `search_techniques` | Natural language search all 30 techniques |
 | Start tracking | `register_experiment` | Create experiment record in SQLite |
 | Generate files | `scaffold_experiment` | Create program.md + eval.sh starter files |
+| Fetch template | `get_template` | Fetch a recipe's template file such as program.md or eval.sh |
 | Log iteration | `log_result` | Record score, change description, cost |
 | View progress | `get_experiment` | Experiment summary + all results |
 | Browse runs | `list_experiments` | All experiments, filter by status/project |
 | Update status | `update_experiment` | Mark running/paused/completed/failed |
+| Diagnostics | `get_server_info` | Version, catalog stats, and DB path for diagnostics/handshake |
 | Meta-learning | `log_technique_outcome` | "This technique worked in this domain" |
 | Self-improve | `log_technique_outcome` + `search_techniques` | Build outcome database for better suggestions |
 
@@ -155,8 +157,8 @@ Recipes are composed from 4 layers. You can build custom recipes by mixing layer
 
 4. **Recipe** (pre-composed defaults): Ready-made combinations for common problems.
    - prompt-optimization: hill-climbing + llm-as-judge + single-ratchet
-   - code-performance: bayesian-opt + benchmark-harness + single-ratchet
-   - ml-training: evolutionary + cost-latency-eval + bounded-episode
+   - code-performance: hill-climbing + benchmark-harness + branch-and-merge
+   - ml-training: hill-climbing + benchmark-harness + single-ratchet
 
 ### Building Custom Recipes
 
@@ -171,8 +173,8 @@ bayesian-optimization + rubric-scorer                + champion-challenger = con
 
 **Compatibility rules**:
 - GPU-required strategies (some evolutionary variants) need GPU evaluator or surrogate
-- Human-approval-gate limits iteration speed — pair with sample-efficient strategies (Bayesian, bandit)
-- Regression-detector should wrap any evaluator for production systems
+- human-approval-gate limits iteration speed — pair with sample-efficient strategies (bayesian-optimization, multi-armed-bandit)
+- regression-detector should wrap any evaluator for production systems
 
 ## Anti-Patterns
 
@@ -189,7 +191,7 @@ If you realize your metric is wrong, stop, register a new experiment with the ne
 Use bounded-episode or checkpoint-and-resume. Power outages happen.
 
 ### DON'T: Ignore cost
-Set token/dollar budgets. Call `log_result` with cost data. Review `list_experiments` to see cumulative spend.
+Define token/dollar budgets and stopping conditions in the experiment spec, then enforce them in the agent loop. `register_experiment` tracks core fields; call `log_result` with cost data and review `list_experiments` to see cumulative spend.
 
 ### DON'T: Forget meta-learning
 After every experiment, `log_technique_outcome`. This is how the system gets smarter.

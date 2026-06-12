@@ -22,6 +22,18 @@ const __dirname = dirname(__filename);
 
 const skillSrc = resolve(__dirname, "../skills/autoresearch");
 
+const USAGE = `Usage:
+  npx -p autoresearch-mcp autoresearch-install-skill [--target <platform>] [--dry-run]
+  autoresearch-mcp install-skill [--target <platform>] [--dry-run]
+
+Options:
+  --target, -t <platform>  Install for opencode, claude, or all (default: all)
+  --dry-run, -d            Print what would be done without making changes
+  --overwrite              Replace an existing skill directory/link
+  --symlink                Create a symlink instead of copying files
+  --copy                   Copy files instead of creating a symlink
+  --help, -h               Show this help message`;
+
 const PLATFORMS = {
 	opencode: {
 		name: "OpenCode",
@@ -40,23 +52,38 @@ function parseArgs(argv = process.argv.slice(2)) {
 	let dryRun = false;
 	let overwrite = false;
 	let mode = "copy";
+	let help = false;
 
 	for (let i = 0; i < argv.length; i++) {
-		if (argv[i] === "--target" || argv[i] === "-t") {
-			target = argv[i + 1] ?? "all";
+		const arg = argv[i];
+
+		if (arg === "--target" || arg === "-t") {
+			const value = argv[i + 1];
+			if (value === undefined || value.startsWith("-")) {
+				return {
+					error: "--target requires a value (opencode, claude, all)",
+					ok: false,
+				};
+			}
+
+			target = value;
 			i++;
-		} else if (argv[i] === "--dry-run" || argv[i] === "-d") {
+		} else if (arg === "--dry-run" || arg === "-d") {
 			dryRun = true;
-		} else if (argv[i] === "--overwrite") {
+		} else if (arg === "--overwrite") {
 			overwrite = true;
-		} else if (argv[i] === "--symlink") {
+		} else if (arg === "--symlink") {
 			mode = "symlink";
-		} else if (argv[i] === "--copy") {
+		} else if (arg === "--copy") {
 			mode = "copy";
+		} else if (arg === "--help" || arg === "-h") {
+			help = true;
+		} else {
+			return { error: `Unknown option: ${arg}`, ok: false };
 		}
 	}
 
-	return { dryRun, mode, overwrite, target };
+	return { ok: true, opts: { dryRun, help, mode, overwrite, target } };
 }
 
 function getTargets(target) {
@@ -77,7 +104,21 @@ async function pathExists(path) {
 }
 
 export async function installSkill(argv = process.argv.slice(2)) {
-	const { dryRun, mode, overwrite, target } = parseArgs(argv);
+	const parsed = parseArgs(argv);
+	if (!parsed.ok) {
+		console.error(parsed.error);
+		console.error(USAGE);
+		process.exitCode = 1;
+		return;
+	}
+
+	const { dryRun, help, mode, overwrite, target } = parsed.opts;
+	if (help) {
+		console.log(USAGE);
+		process.exitCode = 0;
+		return;
+	}
+
 	const targets = getTargets(target);
 
 	if (targets.length === 0) {

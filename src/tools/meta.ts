@@ -5,7 +5,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import z from "zod";
 import { logTechniqueOutcome } from "../db/experiments.js";
-import { getDbPath } from "../db/schema.js";
+import { getActiveDbPath } from "../db/schema.js";
 import { getCatalogStats } from "../db/techniques.js";
 import { VERSION } from "../version.js";
 
@@ -25,7 +25,7 @@ export function registerMetaTools(mcp: McpServer): void {
 								{
 									version: VERSION,
 									catalog: stats,
-									db_path: getDbPath(),
+									db_path: getActiveDbPath(),
 								},
 								null,
 								2,

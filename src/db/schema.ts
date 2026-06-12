@@ -197,6 +197,14 @@ const MIGRATIONS: Migration[] = [
       INSERT INTO catalog_fts(catalog_fts) VALUES('rebuild');
     `,
 	},
+	{
+		version: 3,
+		name: "result_baseline_semantics",
+		sql: `
+      ALTER TABLE experiment_results
+      ADD COLUMN is_baseline INTEGER NOT NULL DEFAULT 0;
+    `,
+	},
 ];
 
 let _db: Database | null = null;
@@ -214,6 +222,10 @@ export function getDbPath(): string {
 	}
 
 	return getDefaultDbPath();
+}
+
+export function getActiveDbPath(): string {
+	return _dbPath;
 }
 
 export function getDb(): Database {

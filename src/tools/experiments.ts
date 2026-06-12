@@ -15,6 +15,8 @@ import {
 	RecipeId,
 } from "../types.js";
 
+const RESULT_DISPLAY_CAP = 200;
+
 export function registerExperimentTools(mcp: McpServer): void {
 	mcp.tool(
 		"register_experiment",
@@ -221,9 +223,27 @@ export function registerExperimentTools(mcp: McpServer): void {
 			change_description: z
 				.string()
 				.describe("Human-readable description of the attempted change"),
-			duration_seconds: z.number().optional().describe("Optional wall time"),
-			cost_tokens: z.number().optional().describe("Optional token cost"),
-			cost_dollars: z.number().optional().describe("Optional dollar cost"),
+			duration_seconds: z
+				.number()
+				.nonnegative()
+				.optional()
+				.describe("Optional wall time"),
+			cost_tokens: z
+				.number()
+				.nonnegative()
+				.optional()
+				.describe("Optional token cost"),
+			cost_dollars: z
+				.number()
+				.nonnegative()
+				.optional()
+				.describe("Optional dollar cost"),
+			is_baseline: z
+				.boolean()
+				.optional()
+				.describe(
+					"Mark this result as the baseline measurement taken before any changes",
+				),
 		},
 		async ({
 			experiment_id,
@@ -234,6 +254,7 @@ export function registerExperimentTools(mcp: McpServer): void {
 			duration_seconds,
 			cost_tokens,
 			cost_dollars,
+			is_baseline,
 		}) => {
 			try {
 				logExperimentResult({
@@ -245,6 +266,7 @@ export function registerExperimentTools(mcp: McpServer): void {
 					duration_seconds,
 					cost_tokens,
 					cost_dollars,
+					is_baseline,
 				});
 
 				const experiment = getExperiment(experiment_id);
@@ -287,6 +309,10 @@ export function registerExperimentTools(mcp: McpServer): void {
 					),
 				];
 
+				if (is_baseline) {
+					lines.splice(6, 0, "Baseline recorded.");
+				}
+
 				return {
 					content: [{ type: "text" as const, text: lines.join("\n") }],
 				};
@@ -325,15 +351,25 @@ export function registerExperimentTools(mcp: McpServer): void {
 					};
 				}
 
-				const results = include_results
-					? getExperimentResults(experiment_id)
+				const fetchedResults = include_results
+					? getExperimentResults(experiment_id, RESULT_DISPLAY_CAP + 1)
 					: undefined;
+				const results = fetchedResults?.slice(0, RESULT_DISPLAY_CAP);
+				const resultsTruncated =
+					results !== undefined && fetchedResults !== undefined
+						? results.length === RESULT_DISPLAY_CAP &&
+							fetchedResults.length > RESULT_DISPLAY_CAP
+						: false;
 
 				return {
 					content: [
 						{
 							type: "text" as const,
-							text: formatExperimentMarkdown(experiment, results),
+							text: formatExperimentMarkdown(
+								experiment,
+								results,
+								resultsTruncated,
+							),
 						},
 					],
 				};
@@ -349,7 +385,13 @@ export function registerExperimentTools(mcp: McpServer): void {
 		{
 			status: z.string().optional().describe("Optional status filter"),
 			project: z.string().optional().describe("Optional project filter"),
-			limit: z.number().int().positive().default(10).describe("Maximum rows"),
+			limit: z
+				.number()
+				.int()
+				.min(1)
+				.max(100)
+				.default(10)
+				.describe("Maximum rows"),
 		},
 		async ({ status, project, limit }) => {
 			try {
@@ -483,6 +525,7 @@ function inferArtifactType(
 function formatExperimentMarkdown(
 	experiment: Experiment,
 	results?: ExperimentResult[],
+	resultsTruncated = false,
 ): string {
 	const lines = [
 		joinText("# Experiment ", experiment.id),
@@ -530,6 +573,9 @@ function formatExperimentMarkdown(
 
 	if (results) {
 		lines.push("", "## Results");
+		if (resultsTruncated) {
+			lines.push("(results truncated to 200)");
+		}
 
 		if (results.length === 0) {
 			lines.push("No results logged yet.");

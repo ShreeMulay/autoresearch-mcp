@@ -11,6 +11,35 @@ import packageJson from "../../package.json";
 const repoRoot = resolve(import.meta.dir, "../..");
 const tempDirs: string[] = [];
 
+async function pathExists(path: string): Promise<boolean> {
+	try {
+		await access(path);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+async function runInstallSkillBin(args: string[]) {
+	const tempHome = await mkdtemp(join(tmpdir(), "autoresearch-home-"));
+	tempDirs.push(tempHome);
+
+	const proc = Bun.spawn(["node", "bin/autoresearch-install-skill", ...args], {
+		cwd: repoRoot,
+		env: { ...process.env, HOME: tempHome },
+		stderr: "pipe",
+		stdout: "pipe",
+	});
+
+	const [exitCode, stdout, stderr] = await Promise.all([
+		proc.exited,
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+	]);
+
+	return { exitCode, stderr, stdout, tempHome };
+}
+
 afterAll(async () => {
 	await Promise.all(
 		tempDirs.map((dir) => rm(dir, { force: true, recursive: true })),
@@ -101,6 +130,41 @@ describe("published package bins", () => {
 		expect(exitCode).toBe(0);
 		expect(stdout).toContain("[DRY RUN]");
 		expect(stdout).toContain("Claude Code");
+	});
+
+	it("standalone install-skill bin rejects unknown options without writes", async () => {
+		const { exitCode, stderr, tempHome } = await runInstallSkillBin([
+			"--dryrun",
+		]);
+
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("Unknown option: --dryrun");
+		expect(await pathExists(join(tempHome, ".opencode", "skills"))).toBe(false);
+		expect(await pathExists(join(tempHome, ".claude", "skills"))).toBe(false);
+	});
+
+	it("standalone install-skill bin rejects target without a value", async () => {
+		const { exitCode, stderr } = await runInstallSkillBin(["--target"]);
+
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("--target requires a value");
+	});
+
+	it("standalone install-skill bin rejects invalid targets", async () => {
+		const { exitCode, stderr } = await runInstallSkillBin([
+			"--target",
+			"bogus",
+		]);
+
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("Valid targets: opencode, claude, all");
+	});
+
+	it("standalone install-skill bin prints help", async () => {
+		const { exitCode, stdout } = await runInstallSkillBin(["--help"]);
+
+		expect(exitCode).toBe(0);
+		expect(stdout).toContain("Usage");
 	});
 });
 
