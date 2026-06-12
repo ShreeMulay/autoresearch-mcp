@@ -1,0 +1,63 @@
+when:
+  - event: [push, pull_request]
+
+steps:
+  quality-bun-1-3-10:
+    image: oven/bun:1.3.10
+    commands:
+      - bun install --frozen-lockfile
+      - bunx tsc --noEmit
+      - bun run lint
+      - bun test
+      - bun run build
+      - bun bin/autoresearch-mcp --help
+      - bun bin/autoresearch-mcp install-skill --dry-run --target opencode
+
+  quality-bun-latest:
+    image: oven/bun:latest
+    commands:
+      - bun install --frozen-lockfile
+      - bunx tsc --noEmit
+      - bun run lint
+      - bun test
+      - bun run build
+      - bun bin/autoresearch-mcp --help
+      - bun bin/autoresearch-mcp install-skill --dry-run --target opencode
+
+  installer-node-20:
+    image: node:20
+    commands:
+      - node --check scripts/install-skill.js
+      - SANDBOX=$(mktemp -d)
+      - HOME="$SANDBOX" node bin/autoresearch-install-skill --dry-run --target claude
+      - HOME="$SANDBOX" node bin/autoresearch-install-skill --help
+      - |
+        if HOME="$SANDBOX" node bin/autoresearch-install-skill --dryrun; then
+          echo "unknown flag was accepted but must be rejected"
+          exit 1
+        fi
+      - |
+        if [ -e "$SANDBOX/.claude/skills" ] || [ -e "$SANDBOX/.opencode/skills" ]; then
+          echo "installer wrote files during dry-run/error paths"
+          exit 1
+        fi
+      - rm -rf "$SANDBOX"
+
+  installer-node-22:
+    image: node:22
+    commands:
+      - node --check scripts/install-skill.js
+      - SANDBOX=$(mktemp -d)
+      - HOME="$SANDBOX" node bin/autoresearch-install-skill --dry-run --target claude
+      - HOME="$SANDBOX" node bin/autoresearch-install-skill --help
+      - |
+        if HOME="$SANDBOX" node bin/autoresearch-install-skill --dryrun; then
+          echo "unknown flag was accepted but must be rejected"
+          exit 1
+        fi
+      - |
+        if [ -e "$SANDBOX/.claude/skills" ] || [ -e "$SANDBOX/.opencode/skills" ]; then
+          echo "installer wrote files during dry-run/error paths"
+          exit 1
+        fi
+      - rm -rf "$SANDBOX"
