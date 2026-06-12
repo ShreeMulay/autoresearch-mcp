@@ -31,6 +31,29 @@ beforeEach(() => {
 });
 
 describe("FTS5 safe-token search", () => {
+	it("returns no results for non-empty queries with no supported FTS terms", () => {
+		upsertCatalogItem(
+			makeItem("one", { description: "optimize prompts" }),
+			"hash-one",
+			"yaml-one",
+		);
+		upsertCatalogItem(
+			makeItem("two", { description: "measure code" }),
+			"hash-two",
+			"yaml-two",
+		);
+		upsertCatalogItem(
+			makeItem("three", { description: "revise content" }),
+			"hash-three",
+			"yaml-three",
+		);
+
+		expect(searchCatalog("C++")).toEqual([]);
+		expect(searchCatalog("AND")).toEqual([]);
+		expect(searchCatalog("")).toHaveLength(3);
+		expect(searchCatalog("prompts").map((item) => item.id)).toContain("one");
+	});
+
 	it("handles punctuation-heavy user queries without throwing", () => {
 		upsertCatalogItem(
 			makeItem("safe", {

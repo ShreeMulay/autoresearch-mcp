@@ -8,11 +8,12 @@ on:
 
 jobs:
   ci:
-    name: Quality Gates
+    name: Quality Gates (bun ${{ matrix.bun-version }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
         bun-version:
+          - "1.3.10"
           - latest
 
     steps:
@@ -46,6 +47,9 @@ jobs:
 
       - name: Package smoke
         run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          TARBALL="autoresearch-mcp-${VERSION}.tgz"
           node --check scripts/install-skill.js
           node bin/autoresearch-install-skill --dry-run --target claude
           bun bin/autoresearch-mcp --help
@@ -53,7 +57,51 @@ jobs:
           bun pm pack
           TMP_DIR=$(mktemp -d)
           bun init -y "$TMP_DIR"
-          bun add "$PWD/autoresearch-mcp-0.3.0.tgz" --cwd "$TMP_DIR"
+          bun add "$PWD/$TARBALL" --cwd "$TMP_DIR"
           "$TMP_DIR/node_modules/.bin/autoresearch-mcp" --help
           "$TMP_DIR/node_modules/.bin/autoresearch-install-skill" --dry-run --target opencode
-          rm -rf "$TMP_DIR" autoresearch-mcp-0.3.0.tgz
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+            | timeout 20 "$TMP_DIR/node_modules/.bin/autoresearch-mcp" > "$TMP_DIR/tools.json" || true
+          grep -q '"search_techniques"' "$TMP_DIR/tools.json"
+          grep -q '"get_server_info"' "$TMP_DIR/tools.json"
+          grep -q '"scaffold_experiment"' "$TMP_DIR/tools.json"
+          grep -q '"log_technique_outcome"' "$TMP_DIR/tools.json"
+          rm -rf "$TMP_DIR" "$TARBALL"
+
+  installer-node:
+    name: Installer (node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version:
+          - "20"
+          - "22"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Installer smoke (Node only, no Bun)
+        run: |
+          set -euo pipefail
+          node --check scripts/install-skill.js
+          SANDBOX=$(mktemp -d)
+          HOME="$SANDBOX" node bin/autoresearch-install-skill --dry-run --target claude
+          HOME="$SANDBOX" node bin/autoresearch-install-skill --help
+          if HOME="$SANDBOX" node bin/autoresearch-install-skill --dryrun; then
+            echo "unknown flag was accepted but must be rejected"
+            exit 1
+          fi
+          if [ -e "$SANDBOX/.claude/skills" ] || [ -e "$SANDBOX/.opencode/skills" ]; then
+            echo "installer wrote files during dry-run/error paths"
+            exit 1
+          fi
+          rm -rf "$SANDBOX"

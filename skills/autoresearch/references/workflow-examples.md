@@ -50,7 +50,7 @@ User: "I need to optimize my medical note summarization prompt."
 ### Step 5: Run Loop
 ```
 Iteration 1: Baseline prompt → Score: 0.42
-→ AI: Call log_result(exp-123e4567, iteration=1, score=0.42, improved=false,
+→ AI: Call log_result(exp-123e4567, iteration=1, score=0.42, improved=false, is_baseline=true,
                      change_description="Baseline system prompt")
 
 Iteration 2: Shorten instruction text → Score: 0.51
@@ -69,6 +69,8 @@ Iteration 5: Final polish → Score: 0.54
 → AI: Call log_result(exp-123e4567, iteration=5, score=0.54, improved=false,
                      change_description="Added explicit length constraint")
 ```
+
+The baseline log seeds `best_score` until an improved iteration lands.
 
 ### Step 6: Conclude
 ```
@@ -162,7 +164,7 @@ Each iteration logged with `log_result`.
                             max_experiment_duration="30 seconds",
                             needs_overnight=true,
                             domain="ml-training")
-→ Returns: ml-training recipe (evolutionary + cost-latency + bounded-episode)
+→ Returns: ml-training recipe (hill-climbing + benchmark-harness + single-ratchet)
 ```
 
 ### Register
@@ -209,7 +211,7 @@ for iteration in range(50):
   domain="ml-training",
   outcome="success",
   score_improvement=8.3,
-  notes="Bounded episode prevented overfitting. Early stopping at iter 42 saved 8 iterations."
+  notes="Single-ratchet kept only benchmark improvements. Early stopping at iter 42 saved 8 iterations."
 )
 ```
 

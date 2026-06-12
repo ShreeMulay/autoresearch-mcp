@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-12
+
+First published npm release. Versions 0.1.0 through 0.3.0 were never published to a registry.
+
+### Security
+
+- **Sanitized generated scaffold content** — all user-provided strings (metric name, target file, project name) are stripped of newlines and control characters before being written into generated `eval.sh`, `program.md`, and `results.tsv`. Prevents shell injection through a multiline `metric_name` reaching an executable script.
+- **Strict installer argument parsing** — unknown flags (for example a `--dryrun` typo) now abort with an error before any filesystem changes instead of silently performing a real install. `--target` requires a valid value and `--help` is supported.
+- **`target_file` confinement** — `scaffold_experiment` rejects target files that resolve outside `project_path`.
+- **Runnable npm bins** — `autoresearch-mcp` (Bun) and `autoresearch-install-skill` (Node) ship as real executable wrappers under `bin/` (previously pointed at non-executable sources).
+
+### Added
+
+- **`is_baseline` on `log_result`** — baseline measurements seed `best_score` until an improved iteration lands. Schema migration v3 adds the column.
+- **Curated scaffold templates** — `scaffold_experiment` now uses the recipe templates bundled under `catalog/templates/<recipe>/` when present, and appends an experiment metadata section.
+- **Fail-closed placeholder evaluator** — recipes without a curated template scaffold an `eval.sh` that exits 1 with a clear message instead of printing a fake `0` score.
+- **`engines.node >= 20.19`** — declares the Node requirement for the skill installer alongside the existing Bun requirement for the server.
+- **Catalog loader strictness** — duplicate technique IDs and YAML layer/directory mismatches are reported as load errors; the bundled catalog is regression-tested to load with zero errors.
+
+### Changed
+
+- **Default database path** moved out of the package tree to the user data directory (`$XDG_DATA_HOME/autoresearch-mcp/autoresearch.db` or `~/.local/share/autoresearch-mcp/autoresearch.db`). `AUTORESEARCH_DB_PATH` still overrides it and `:memory:` is honored.
+- **`get_server_info`** returns `{version, catalog, db_path}` and reports the database path actually opened by the active connection.
+- **Search semantics** — a non-empty query that sanitizes to zero FTS tokens (for example `C++` or `AND`) returns an unsupported-query message instead of dumping the whole catalog. An empty query still lists everything.
+- **`suggest_technique`** — deterministic `general-ratchet` fallback when nothing scores, and metric-dependent recipes are penalized when `has_scalar_metric` is false.
+- **Input bounds** — `list_experiments.limit` capped at 100, experiment results capped at 200 per fetch, search tags capped at 20 entries, cost and duration values must be nonnegative.
+- **Skill synchronized with catalog** — recipe compositions in `SKILL.md` and the reference docs now match the shipped YAML catalog (the catalog is authoritative); removed a reference to a nonexistent `tree-search` strategy; the tool mapping covers all 12 tools.
+- **CI** — Bun pinned-minimum plus latest matrix, a Node 20/22 job for the installer bin, dynamic tarball naming, and a packed-install smoke test that asserts the MCP `tools/list` response.
+
 ## [0.3.0] - 2026-05-07
 
 ### Security

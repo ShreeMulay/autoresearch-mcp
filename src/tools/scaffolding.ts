@@ -68,6 +68,23 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 				const resolvedProjectPath = resolve(project_path);
 				await access(resolvedProjectPath);
 
+				const targetArtifact = resolveTargetArtifact(
+					resolvedProjectPath,
+					target_file,
+				);
+
+				if (!targetArtifact) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: "target_file must resolve inside project_path",
+							},
+						],
+						isError: true,
+					};
+				}
+
 				const autoresearchDir = join(resolvedProjectPath, "autoresearch");
 				const programPath = join(autoresearchDir, "program.md");
 				const evalPath = join(autoresearchDir, "eval.sh");
@@ -80,17 +97,18 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 					overwrite,
 				);
 
-				const targetArtifact = resolveTargetArtifact(
-					resolvedProjectPath,
-					target_file,
-				);
-				const programContent = buildProgramTemplate({
+				const evaluatorCommand = "./autoresearch/eval.sh";
+				const programContent = await buildScaffoldProgramContent({
 					recipe,
 					metricName: metric_name,
 					targetFile: target_file,
+					targetArtifact,
 					customInstructions: custom_instructions,
+					evaluatorCommand,
 				});
-				const evalContent = buildEvalTemplate({ metricName: metric_name });
+				const evalContent = await buildScaffoldEvalContent(recipe.id, {
+					metricName: metric_name,
+				});
 				const resultsContent = buildResultsTemplate();
 
 				await writeFile(programPath, programContent, "utf8");
@@ -103,7 +121,7 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 					targetArtifact,
 					metricName: metric_name,
 					recipeId: recipe.id,
-					evaluatorCommand: "./autoresearch/eval.sh",
+					evaluatorCommand,
 				});
 
 				createExperiment({
@@ -189,16 +207,87 @@ function isRecipe(recipe: CatalogItem | null): recipe is CatalogItem {
 	return recipe !== null && recipe.layer === "recipe";
 }
 
+async function buildScaffoldProgramContent(args: {
+	recipe: CatalogItem;
+	metricName: string;
+	targetFile?: string;
+	targetArtifact: string;
+	customInstructions?: string;
+	evaluatorCommand: string;
+}): Promise<string> {
+	const templatePath = resolveTemplatePath(args.recipe.id, "program.md");
+
+	try {
+		await access(templatePath);
+		const curated = await readFile(templatePath, "utf8");
+		return appendExperimentMetadata(curated, {
+			metricName: args.metricName,
+			targetArtifact: args.targetFile ?? args.targetArtifact,
+			evaluatorCommand: args.evaluatorCommand,
+		});
+	} catch {
+		return buildProgramTemplate({
+			recipe: args.recipe,
+			metricName: args.metricName,
+			targetFile: args.targetFile,
+			customInstructions: args.customInstructions,
+		});
+	}
+}
+
+async function buildScaffoldEvalContent(
+	recipeId: string,
+	args: { metricName: string },
+): Promise<string> {
+	const templatePath = resolveTemplatePath(recipeId, "eval.sh");
+
+	try {
+		await access(templatePath);
+		return await readFile(templatePath, "utf8");
+	} catch {
+		return buildFailClosedEvalTemplate(args);
+	}
+}
+
+function appendExperimentMetadata(
+	content: string,
+	args: {
+		metricName: string;
+		targetArtifact: string;
+		evaluatorCommand: string;
+	},
+): string {
+	return joinText(
+		[
+			content.trimEnd(),
+			"",
+			"## Experiment Metadata",
+			joinText("- Metric Name: ", sanitizeInline(args.metricName)),
+			joinText("- Target Artifact: ", sanitizeInline(args.targetArtifact)),
+			"- Metric Direction: maximize",
+			joinText("- Evaluator Command: ", sanitizeInline(args.evaluatorCommand)),
+		].join("\n"),
+		"\n",
+	);
+}
+
 function buildProgramTemplate(args: {
 	recipe: CatalogItem;
 	metricName: string;
 	targetFile?: string;
 	customInstructions?: string;
 }): string {
+	const metricName = sanitizeInline(args.metricName);
+	const targetFile = args.targetFile
+		? sanitizeInline(args.targetFile)
+		: undefined;
+	const customInstructions = args.customInstructions
+		? sanitizeInline(args.customInstructions)
+		: undefined;
 	const strategyHints = getStrategyHints(args.recipe);
-	const modifyTargets = args.targetFile
+	const modifyTargets = targetFile
 		? [
-				joinText("- Focus edits on ", inlineCode(args.targetFile)),
+				joinText("- Focus edits on ", inlineCode(targetFile)),
 				"- Keep changes tightly coupled to the metric objective",
 			]
 		: [
@@ -217,14 +306,14 @@ function buildProgramTemplate(args: {
 		"## Objective and Metric",
 		joinText(
 			"Optimize the target artifact to improve the metric named ",
-			args.metricName,
+			metricName,
 			".",
 		),
 		"Use the evaluation harness to produce a single numeric score after each candidate change.",
 		"",
 		"## Target File Specification",
-		args.targetFile
-			? joinText("Target file: ", inlineCode(args.targetFile))
+		targetFile
+			? joinText("Target file: ", inlineCode(targetFile))
 			: "Target file: decide based on the recipe and the metric objective.",
 		"",
 		"## What to Modify",
@@ -237,8 +326,8 @@ function buildProgramTemplate(args: {
 		...strategyHints,
 	];
 
-	if (args.customInstructions) {
-		lines.push("", "## Custom Instructions", args.customInstructions);
+	if (customInstructions) {
+		lines.push("", "## Custom Instructions", customInstructions);
 	}
 
 	lines.push(
@@ -251,14 +340,31 @@ function buildProgramTemplate(args: {
 	return joinText(lines.join("\n"), "\n");
 }
 
-function buildEvalTemplate(args: { metricName: string }): string {
+function buildFailClosedEvalTemplate(args: { metricName: string }): string {
 	return joinText(
 		[
 			"#!/usr/bin/env bash",
 			"set -euo pipefail",
 			"",
 			"# Replace this stub with the real evaluator for the metric below.",
-			joinText("# Metric: ", args.metricName),
+			joinText("# Metric: ", sanitizeInline(args.metricName)),
+			"# Contract: print exactly one numeric score to stdout.",
+			"",
+			"printf '%s\\n' 'autoresearch: placeholder evaluator - replace this with a real evaluator that prints a single numeric score' >&2",
+			"exit 1",
+		].join("\n"),
+		"\n",
+	);
+}
+
+function buildDefaultEvalTemplate(args: { metricName: string }): string {
+	return joinText(
+		[
+			"#!/usr/bin/env bash",
+			"set -euo pipefail",
+			"",
+			"# Replace this stub with the real evaluator for the metric below.",
+			joinText("# Metric: ", sanitizeInline(args.metricName)),
 			"# Contract: print exactly one numeric score to stdout.",
 			"",
 			"printf '%s\\n' '0'",
@@ -288,7 +394,7 @@ function buildDefaultTemplate(
 	}
 
 	if (templateName === "eval.sh") {
-		return buildEvalTemplate({ metricName: "PRIMARY_METRIC" });
+		return buildDefaultEvalTemplate({ metricName: "PRIMARY_METRIC" });
 	}
 
 	if (templateName === "results.tsv") {
@@ -521,12 +627,23 @@ function getStrategyHints(recipe: CatalogItem): string[] {
 function resolveTargetArtifact(
 	projectPath: string,
 	targetFile?: string,
-): string {
+): string | null {
+	const resolvedProject = resolve(projectPath);
+
 	if (!targetFile) {
-		return projectPath;
+		return resolvedProject;
 	}
 
-	return resolve(projectPath, targetFile);
+	const resolvedTarget = resolve(resolvedProject, targetFile);
+
+	if (
+		resolvedTarget !== resolvedProject &&
+		!resolvedTarget.startsWith(joinText(resolvedProject, sep))
+	) {
+		return null;
+	}
+
+	return resolvedTarget;
 }
 
 function getProjectName(projectPath: string): string {
@@ -577,6 +694,18 @@ function inferArtifactType(
 
 function inlineCode(value: string): string {
 	return joinText("`", value, "`");
+}
+
+function sanitizeInline(value: string): string {
+	const withoutLineBreaks = value.replace(/[\r\n\u2028\u2029]+/g, " ");
+
+	return Array.from(withoutLineBreaks)
+		.filter((character) => {
+			const code = character.charCodeAt(0);
+			return code >= 32 && code !== 127;
+		})
+		.join("")
+		.trim();
 }
 
 function toolError(

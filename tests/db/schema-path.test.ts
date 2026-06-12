@@ -7,7 +7,13 @@ import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { closeDb, getDb, getDbPath, resetDb } from "../../src/db/schema.js";
+import {
+	closeDb,
+	getActiveDbPath,
+	getDb,
+	getDbPath,
+	resetDb,
+} from "../../src/db/schema.js";
 
 let previousDbPath: string | undefined;
 let previousXdgDataHome: string | undefined;
@@ -54,6 +60,15 @@ describe("database path handling", () => {
 		expect(existsSync(resolve(":memory:"))).toBe(false);
 		expect(existsSync(resolve(":memory:-wal"))).toBe(false);
 		expect(existsSync(resolve(":memory:-shm"))).toBe(false);
+	});
+
+	it("reports the active DB path after connection initialization", () => {
+		resetDb(":memory:");
+		getDb();
+
+		process.env.AUTORESEARCH_DB_PATH = "/tmp/changed-after-open.db";
+
+		expect(getActiveDbPath()).toBe(":memory:");
 	});
 
 	it("defaults to a user data directory outside the package tree", async () => {

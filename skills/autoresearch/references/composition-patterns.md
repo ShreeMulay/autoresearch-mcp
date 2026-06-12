@@ -20,9 +20,9 @@ Answer these questions:
 | Question | Affects |
 |----------|---------|
 | Do you have a scalar metric? | Pattern choice (ratchet needs scalar) |
-| How long per experiment? | Strategy choice (fast = hill-climbing, slow = Bayesian) |
+| How long per experiment? | Strategy choice (fast = hill-climbing, slow = bayesian-optimization) |
 | How many items? | Pattern choice (single = ratchet, batch = two-loop) |
-| Is evaluation automated? | Evaluator choice (auto = benchmark, subjective = LLM judge) |
+| Is evaluation automated? | Evaluator choice (auto = benchmark-harness, subjective = llm-as-judge) |
 | Can you run overnight? | Strategy choice (evolutionary benefits from long runs) |
 | Is production safety required? | Evaluator choice (add regression-detector) |
 
@@ -30,16 +30,16 @@ Answer these questions:
 
 **Strategy-Evaluator Compatibility Matrix**
 
-| Strategy | Benchmark | LLM Judge | Rubric | Pairwise | Regression | Human |
-|----------|-----------|-----------|--------|----------|------------|-------|
+| Strategy | benchmark-harness | llm-as-judge | rubric-scorer | pairwise-comparison | regression-detector | human-approval-gate |
+|----------|-------------------|--------------|---------------|---------------------|---------------------|---------------------|
 | hill-climbing | Best | Good | Good | Slow | Good | Too slow |
 | evolutionary | Best | Good | Good | Slow | Good | Too slow |
-| bayesian-opt | Good | Expensive | Expensive | N/A | Good | N/A |
+| bayesian-optimization | Good | Expensive | Expensive | N/A | Good | N/A |
 | beam-search | Good | Expensive | Good | N/A | Good | N/A |
 | simulated-annealing | Best | Good | Good | Slow | Good | Too slow |
-| bandit | Best | Good | Good | Slow | Good | Too slow |
+| multi-armed-bandit | Best | Good | Good | Slow | Good | Too slow |
 | self-refine | N/A | Best | Best | N/A | N/A | Good |
-| ablation | Good | N/A | N/A | N/A | Best | N/A |
+| ablation-elimination | Good | N/A | N/A | N/A | Best | N/A |
 
 **Legend**: Best = natural fit, Good = works well, Slow = possible but inefficient, Expensive = high cost per iteration, N/A = not applicable, Too slow = human bottleneck
 
@@ -66,7 +66,7 @@ Example: "I want to optimize my API response format for clarity, evaluated by cu
 ## Common Pitfalls
 
 ### Mismatched Speed
-Pairing slow evaluator (human-approval) with fast strategy (hill-climbing) creates a bottleneck. Either automate evaluation or switch to sample-efficient strategy.
+Pairing slow evaluator (human-approval-gate) with fast strategy (hill-climbing) creates a bottleneck. Either automate evaluation or switch to sample-efficient strategy.
 
 ### Missing Regression Guard
 Production optimizations without regression-detector are dangerous. Always add regression check for deployed systems.
@@ -75,7 +75,7 @@ Production optimizations without regression-detector are dangerous. Always add r
 Start with general-ratchet. Build custom recipes only after 3+ experiments teach you what matters in your domain.
 
 ### Ignoring Cost
-Bayesian optimization with LLM-as-judge evaluator = expensive per iteration. Set iteration budgets. Use cost-latency-evaluator for multi-objective awareness.
+bayesian-optimization with llm-as-judge evaluator = expensive per iteration. Set iteration budgets. Use cost-latency-evaluator for multi-objective awareness.
 
 ## Meta-Composition
 

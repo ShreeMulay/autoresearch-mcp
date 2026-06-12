@@ -10,8 +10,144 @@ import {
 	getCatalogStats,
 	listCatalogItems,
 	searchCatalog,
+	toFtsQuery,
 } from "../db/techniques.js";
 import type { CatalogItem } from "../types.js";
+
+export interface RankedRecipe {
+	recipe: CatalogItem;
+	score: number;
+	reasons: string[];
+}
+
+export interface RankRecipeOptions {
+	domain?: string;
+	hasScalarMetric?: boolean;
+	needsOvernight?: boolean;
+	searchResultIds?: Set<string>;
+}
+
+export function rankRecipes(
+	recipes: CatalogItem[],
+	problemText: string,
+	opts: RankRecipeOptions,
+): RankedRecipe[] {
+	const tokens = tokenizeProblem(problemText);
+	const scoredRecipes = recipes.map((recipe, index) => {
+		let score = 0;
+		const reasons: string[] = [];
+		const haystack = recipeHaystack(recipe);
+
+		if (opts.searchResultIds?.has(recipe.id)) {
+			score += 3;
+			reasons.push("Matches your problem description");
+		}
+
+		const keywordMatches = tokens.filter((token) => haystack.includes(token));
+		if (keywordMatches.length > 0) {
+			score += keywordMatches.length;
+			reasons.push(
+				`Matches keywords: ${Array.from(new Set(keywordMatches)).join(", ")}`,
+			);
+		}
+
+		if (
+			opts.domain &&
+			recipe.tags.some((tag) =>
+				tag.toLowerCase().includes(opts.domain?.toLowerCase() ?? ""),
+			)
+		) {
+			score += 2;
+			reasons.push(`Matches domain: ${opts.domain}`);
+		}
+
+		if (opts.hasScalarMetric === true) {
+			score += 1;
+			reasons.push("You have a scalar metric (good for ratchet patterns)");
+		}
+
+		if (
+			opts.hasScalarMetric === false &&
+			["benchmark-harness", "binary-evaluator"].includes(
+				recipe.composes?.evaluator ?? "",
+			)
+		) {
+			score -= 3;
+			reasons.push("Penalized because this evaluator expects a scalar metric");
+		}
+
+		if (
+			opts.needsOvernight &&
+			recipe.tags.some((tag) =>
+				["autonomous", "overnight", "batch"].includes(tag),
+			)
+		) {
+			score += 2;
+			reasons.push("Supports overnight autonomous operation");
+		}
+
+		if (recipe.requires_gpu) {
+			score -= 1;
+		}
+
+		return { index, reasons, recipe, score };
+	});
+
+	scoredRecipes.sort((a, b) => b.score - a.score || a.index - b.index);
+
+	if ((scoredRecipes[0]?.score ?? 0) <= 0) {
+		const fallback = scoredRecipes.find(
+			(candidate) => candidate.recipe.id === "general-ratchet",
+		);
+
+		if (fallback) {
+			fallback.reasons = [
+				...fallback.reasons,
+				"fallback: no recipe scored above zero, so using the deterministic default",
+			];
+			return [
+				fallback,
+				...scoredRecipes.filter(
+					(candidate) => candidate.recipe.id !== "general-ratchet",
+				),
+			];
+		}
+	}
+
+	return scoredRecipes;
+}
+
+function tokenizeProblem(problemText: string): string[] {
+	const stopWords = new Set([
+		"and",
+		"for",
+		"the",
+		"with",
+		"that",
+		"this",
+		"from",
+		"into",
+		"your",
+	]);
+	return (problemText.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? [])
+		.filter((token) => token.length > 2)
+		.filter((token) => !stopWords.has(token));
+}
+
+function recipeHaystack(recipe: CatalogItem): string {
+	return [
+		recipe.id,
+		recipe.name,
+		recipe.description,
+		recipe.when_to_use,
+		recipe.when_not_to_use ?? "",
+		recipe.core_pattern ?? "",
+		...recipe.tags,
+		...(recipe.composes ? Object.values(recipe.composes) : []),
+	]
+		.join(" ")
+		.toLowerCase();
+}
 
 export function registerDiscoveryTools(mcp: McpServer): void {
 	// ============================================================
@@ -33,7 +169,8 @@ export function registerDiscoveryTools(mcp: McpServer): void {
 				.optional()
 				.describe("Filter by catalog layer"),
 			tags: z
-				.array(z.string())
+				.array(z.string().min(1).max(64))
+				.max(20)
 				.optional()
 				.describe("Filter by tags (AND logic)"),
 			limit: z
@@ -52,6 +189,15 @@ export function registerDiscoveryTools(mcp: McpServer): void {
 				if (!query || query.trim() === "") {
 					// List mode
 					items = listCatalogItems({ layer, tags, limit });
+				} else if (toFtsQuery(query) === "") {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: "Query contains only unsupported characters or reserved words for full-text search. Use longer alphanumeric terms, or send an empty query to list all techniques.",
+							},
+						],
+					};
 				} else {
 					// Search mode — use FTS5
 					items = searchCatalog(query, { layer, tags, limit });
@@ -324,59 +470,14 @@ export function registerDiscoveryTools(mcp: McpServer): void {
 				const evaluators = listCatalogItems({ layer: "evaluator" });
 				const patterns = listCatalogItems({ layer: "pattern" });
 
-				// Score recipes based on constraints
-				const scoredRecipes = recipes.map((recipe: CatalogItem) => {
-					let score = 0;
-					const reasons: string[] = [];
-
-					// Check if recipe appeared in search results
-					if (
-						searchResults.some((result: CatalogItem) => result.id === recipe.id)
-					) {
-						score += 3;
-						reasons.push("Matches your problem description");
-					}
-
-					// Domain match
-					if (
-						domain &&
-						recipe.tags.some((tag: string) =>
-							tag.toLowerCase().includes(domain.toLowerCase()),
-						)
-					) {
-						score += 2;
-						reasons.push(`Matches domain: ${domain}`);
-					}
-
-					// Metric availability
-					if (has_scalar_metric === true) {
-						score += 1;
-						reasons.push(
-							"You have a scalar metric (good for ratchet patterns)",
-						);
-					}
-
-					// Overnight needs
-					if (
-						needs_overnight &&
-						recipe.tags.some((tag: string) =>
-							["autonomous", "overnight", "batch"].includes(tag),
-						)
-					) {
-						score += 2;
-						reasons.push("Supports overnight autonomous operation");
-					}
-
-					// GPU check
-					if (recipe.requires_gpu) {
-						score -= 1; // Slight penalty unless explicitly needed
-					}
-
-					return { recipe, score, reasons };
+				const scoredRecipes = rankRecipes(recipes, problem, {
+					domain,
+					hasScalarMetric: has_scalar_metric,
+					needsOvernight: needs_overnight,
+					searchResultIds: new Set(
+						searchResults.map((result: CatalogItem) => result.id),
+					),
 				});
-
-				// Sort by score
-				scoredRecipes.sort((a, b) => b.score - a.score);
 				const top3 = scoredRecipes.slice(0, 3);
 
 				const lines: string[] = [

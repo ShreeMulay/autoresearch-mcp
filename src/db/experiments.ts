@@ -161,6 +161,7 @@ export function logExperimentResult(result: {
 	iteration: number;
 	score: number;
 	improved: boolean;
+	is_baseline?: boolean;
 	change_description: string;
 	duration_seconds?: number;
 	cost_tokens?: number;
@@ -168,15 +169,19 @@ export function logExperimentResult(result: {
 	metadata?: Record<string, unknown>;
 }): number {
 	const db = getDb();
+	assertNonnegative("duration_seconds", result.duration_seconds);
+	assertNonnegative("cost_tokens", result.cost_tokens);
+	assertNonnegative("cost_dollars", result.cost_dollars);
 
 	db.exec("BEGIN IMMEDIATE");
 	try {
 		db.prepare(
-			`INSERT INTO experiment_results (experiment_id, iteration, score, improved, change_description, duration_seconds, cost_tokens, cost_dollars, metadata, created_at)
-       VALUES ($experiment_id, $iteration, $score, $improved, $change_description, $duration_seconds, $cost_tokens, $cost_dollars, $metadata, datetime('now'))
+			`INSERT INTO experiment_results (experiment_id, iteration, score, improved, is_baseline, change_description, duration_seconds, cost_tokens, cost_dollars, metadata, created_at)
+       VALUES ($experiment_id, $iteration, $score, $improved, $is_baseline, $change_description, $duration_seconds, $cost_tokens, $cost_dollars, $metadata, datetime('now'))
        ON CONFLICT(experiment_id, iteration) DO UPDATE SET
          score = excluded.score,
          improved = excluded.improved,
+         is_baseline = excluded.is_baseline,
          change_description = excluded.change_description,
          duration_seconds = excluded.duration_seconds,
          cost_tokens = excluded.cost_tokens,
@@ -187,6 +192,7 @@ export function logExperimentResult(result: {
 			$iteration: result.iteration,
 			$score: result.score,
 			$improved: result.improved ? 1 : 0,
+			$is_baseline: result.is_baseline ? 1 : 0,
 			$change_description: result.change_description,
 			$duration_seconds: result.duration_seconds ?? null,
 			$cost_tokens: result.cost_tokens ?? null,
@@ -219,17 +225,15 @@ export function logExperimentResult(result: {
 
 export function getExperimentResults(
 	experimentId: string,
-	limit?: number,
+	limit = 200,
 ): ExperimentResult[] {
 	const db = getDb();
-	let sql =
-		"SELECT * FROM experiment_results WHERE experiment_id = $experiment_id ORDER BY iteration ASC";
-	const params: Params = { $experiment_id: experimentId };
-
-	if (limit) {
-		sql += " LIMIT $limit";
-		params.$limit = limit;
-	}
+	const sql =
+		"SELECT * FROM experiment_results WHERE experiment_id = $experiment_id ORDER BY iteration ASC LIMIT $limit";
+	const params: Params = {
+		$experiment_id: experimentId,
+		$limit: Math.max(1, Math.trunc(limit)),
+	};
 
 	const rows = db.prepare(sql).all(params) as Record<string, unknown>[];
 	return rows.map((r) => ({
@@ -238,6 +242,7 @@ export function getExperimentResults(
 		iteration: r.iteration as number,
 		score: r.score as number,
 		improved: Boolean(r.improved),
+		is_baseline: Boolean(r.is_baseline),
 		change_description: r.change_description as string,
 		duration_seconds: (r.duration_seconds as number) ?? undefined,
 		cost_tokens: (r.cost_tokens as number) ?? undefined,
@@ -245,6 +250,12 @@ export function getExperimentResults(
 		metadata: r.metadata ? JSON.parse(r.metadata as string) : undefined,
 		created_at: (r.created_at as string) ?? undefined,
 	}));
+}
+
+function assertNonnegative(field: string, value: number | undefined): void {
+	if (value !== undefined && value < 0) {
+		throw new Error(`${field} must be nonnegative`);
+	}
 }
 
 // ============================================================
@@ -323,7 +334,7 @@ function refreshExperimentAggregates(experimentId: string): void {
 		total_iterations: number;
 	};
 
-	const best = db
+	const bestImproved = db
 		.prepare(
 			`SELECT score
        FROM experiment_results
@@ -334,6 +345,19 @@ function refreshExperimentAggregates(experimentId: string): void {
 		.get({ $experiment_id: experimentId } as Params) as {
 		score: number;
 	} | null;
+	const bestBaseline = bestImproved
+		? null
+		: (db
+				.prepare(
+					`SELECT score
+       FROM experiment_results
+       WHERE experiment_id = $experiment_id AND is_baseline = 1
+       ORDER BY iteration DESC, id DESC
+       LIMIT 1`,
+				)
+				.get({ $experiment_id: experimentId } as Params) as {
+				score: number;
+			} | null);
 
 	db.prepare(
 		`UPDATE experiments SET
@@ -346,7 +370,7 @@ function refreshExperimentAggregates(experimentId: string): void {
       updated_at = datetime('now')
      WHERE id = $experiment_id`,
 	).run({
-		$best_score: best?.score ?? null,
+		$best_score: bestImproved?.score ?? bestBaseline?.score ?? null,
 		$cost_dollars: totals.cost_dollars,
 		$cost_tokens: totals.cost_tokens,
 		$cost_wall_seconds: totals.cost_wall_seconds,
