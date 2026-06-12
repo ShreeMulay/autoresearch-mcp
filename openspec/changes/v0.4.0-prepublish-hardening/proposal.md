@@ -1,6 +1,6 @@
 # Change: v0.4.0 Pre-Publish Hardening
 
-## Status: IN PROGRESS
+## Status: IMPLEMENTED - npm publish pending interactive registry auth
 
 ## Why
 
@@ -40,6 +40,6 @@ A full post-merge codebase review (oracle, 2026-06-12) found one security blocke
 - [x] Version bumped to 0.4.0 in `package.json` and `src/version.ts`; CHANGELOG updated.
 - [x] `bun test` (101 pass / 0 fail), `bunx tsc --noEmit`, `bun run lint`, `bun run build` all pass.
 - [x] Packed tarball smoke passes for both public bins, including tools/list and serverInfo 0.4.0 assertions and unknown-flag rejection.
-- [ ] PR merged to `main` with CI green.
-- [ ] npm publish `0.4.0` (`--access public`) and registry smoke verified.
-- [ ] Forgejo repo `thekidneyexperts/autoresearch-mcp` created, `main` pushed, branch protection set, GitHub configured as push mirror.
+- [x] PR #8 merged to `main` (squash `a971c0a`) with CI green on Bun 1.3.10, Bun latest, Node 20, Node 22.
+- [ ] npm publish `0.4.0` (`--access public`) and registry smoke verified. BLOCKED: requires interactive `bunx npm login` by the operator; tracked in Beads.
+- [x] Forgejo repo `thekidneyexperts/autoresearch-mcp` created (public), `main` pushed at `a971c0a`, branch protection restored (no direct push, 1 approval, woodpecker context), GitHub configured as push mirror with sync_on_commit.
