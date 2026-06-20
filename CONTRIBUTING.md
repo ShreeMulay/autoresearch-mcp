@@ -94,6 +94,16 @@ Recipe templates live in `catalog/templates/{recipe-id}/` and usually include:
 
 `program.md` should follow the Karpathy-style pattern: it is the human-agent interface, written by a human, read by an agent. Good templates are lightweight, specific, and operational.
 
+If you add a new recipe ID, update all recipe touchpoints in the same change:
+
+- `catalog/recipes/{recipe-id}.yaml`
+- `catalog/templates/{recipe-id}/program.md`
+- `catalog/templates/{recipe-id}/eval.sh`
+- the `RecipeId` enum in `src/types.ts`
+- scaffold/template tests that prove the recipe has usable templates
+
+Do not add a recipe YAML file without updating `RecipeId`; MCP tool schemas use that enum for validation.
+
 A good `program.md` should explain:
 
 - the objective and primary metric
@@ -105,6 +115,20 @@ A good `program.md` should explain:
 
 `eval.sh` should be deterministic when possible and print a single float to stdout, where higher is better.
 
+## Ratchet execution phases
+
+When contributing toward autonomous execution, keep the `run_ratchet` path phased and explicit:
+
+1. **Plan**: load the experiment spec, budget, risk policy, and constraints.
+2. **Baseline**: run the evaluator once and record the baseline score.
+3. **Mutate**: propose one bounded change to the target artifact.
+4. **Evaluate**: run the evaluator and collect the scalar score plus costs.
+5. **Accept or revert**: keep strict improvements and reject regressions unless the experiment specifies another acceptance rule.
+6. **Record**: log iteration score, change description, cost, and whether it improved the champion.
+7. **Stop**: honor max iterations, time, cost, plateau, approval, and safety constraints.
+
+Each phase should be independently testable. Avoid adding a monolithic autonomous loop that bypasses the existing experiment records.
+
 ## Code contributions
 
 1. Fork the repo.
@@ -114,8 +138,9 @@ A good `program.md` should explain:
 
 ```bash
 bun test
-bunx tsc --noEmit
-bunx biome check src/
+bun run typecheck
+bun run lint
+bun run build
 ```
 
 5. Open a pull request with a clear summary and rationale.

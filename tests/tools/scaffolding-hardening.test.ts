@@ -20,6 +20,7 @@ import {
 	ensureSafeScaffoldDirectory,
 	ensureScaffoldFilesWritable,
 	makeEvalExecutable,
+	readTemplateFileOrNull,
 	resolveTemplatePath,
 } from "../../src/tools/scaffolding.js";
 
@@ -63,6 +64,16 @@ describe("template path safety", () => {
 		expect(() =>
 			resolveTemplatePath("prompt-optimization", "../../package.json"),
 		).toThrow(/Unsupported template/);
+	});
+
+	it("returns null only for missing template files", async () => {
+		const dir = await tempDir();
+		const missingPath = join(dir, "missing-template.md");
+		const directoryPath = join(dir, "not-a-file");
+		await mkdir(directoryPath);
+
+		await expect(readTemplateFileOrNull(missingPath)).resolves.toBeNull();
+		await expect(readTemplateFileOrNull(directoryPath)).rejects.toThrow();
 	});
 });
 

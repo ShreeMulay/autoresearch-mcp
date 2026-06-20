@@ -6,62 +6,28 @@
  */
 
 import { describe, expect, it } from "bun:test";
-
-// The helper functions are not currently exported from experiments.ts.
-// We test them by extracting the logic or by testing the public behavior.
-// For this test file, we verify the core logic patterns used in the tool.
+import { inferArtifactType } from "../../src/tools/artifacts.js";
+import { buildExperimentSpec } from "../../src/tools/experiments.js";
 
 describe("ExperimentSpec inference logic", () => {
 	it("detects prompt artifacts from path/content", () => {
-		const promptSignals = [
-			"system_prompt.md",
-			"prompt.txt",
-			"few_shot_prompt",
-			"my-prompt-engineering-project",
-		];
-
-		for (const signal of promptSignals) {
-			const isPrompt =
-				signal.toLowerCase().includes("prompt") ||
-				signal.toLowerCase().includes("few_shot");
-			expect(isPrompt).toBe(true);
-		}
+		expect(inferArtifactType("system_prompt.md")).toBe("prompt");
+		expect(inferArtifactType("few_shot_prompt")).toBe("prompt");
 	});
 
 	it("detects code artifacts by extension", () => {
-		const codeExtensions = [".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go"];
-		const testPaths = codeExtensions.map((ext) => `src/main${ext}`);
-
-		for (const path of testPaths) {
-			const isCode = codeExtensions.some((ext) =>
-				path.toLowerCase().endsWith(ext),
-			);
-			expect(isCode).toBe(true);
-		}
+		expect(inferArtifactType("src/main.ts")).toBe("code");
+		expect(inferArtifactType("src/main.py")).toBe("code");
 	});
 
 	it("detects config artifacts by extension", () => {
-		const configExtensions = [".json", ".yaml", ".yml", ".toml"];
-		const testPaths = configExtensions.map((ext) => `config${ext}`);
-
-		for (const path of testPaths) {
-			const isConfig = configExtensions.some((ext) =>
-				path.toLowerCase().endsWith(ext),
-			);
-			expect(isConfig).toBe(true);
-		}
+		expect(inferArtifactType("config.json")).toBe("config");
+		expect(inferArtifactType("settings.toml")).toBe("config");
 	});
 
 	it("detects content artifacts by extension", () => {
-		const contentExtensions = [".md", ".txt", ".html"];
-		const testPaths = contentExtensions.map((ext) => `doc${ext}`);
-
-		for (const path of testPaths) {
-			const isContent = contentExtensions.some((ext) =>
-				path.toLowerCase().endsWith(ext),
-			);
-			expect(isContent).toBe(true);
-		}
+		expect(inferArtifactType("doc.md")).toBe("content");
+		expect(inferArtifactType("page.html")).toBe("content");
 	});
 });
 
@@ -129,5 +95,30 @@ describe("Experiment spec building", () => {
 		expect(spec.acceptance_rule).toBe("strict-improvement");
 		expect(spec.stopping_conditions).toContain("budget-exhaustion");
 		expect(spec.risk_policy.network_denied).toBe(true);
+	});
+
+	it("preserves caller-provided budget, risk policy, and constraints", () => {
+		const spec = buildExperimentSpec({
+			targetArtifact: "src/main.ts",
+			metricName: "pass_rate",
+			metricDirection: "maximize",
+			evaluatorCommand: "bun test",
+			mutationStrategy: "LLM edit",
+			budget: { max_iterations: 5, max_dollars: 2.5 },
+			riskPolicy: {
+				sandbox_only: true,
+				requires_approval: true,
+				network_denied: true,
+				secrets_denied: true,
+			},
+			constraints: { metric_floors: { pass_rate: 0.9 } },
+		});
+
+		expect(spec.budget.max_iterations).toBe(5);
+		expect(spec.budget.max_dollars).toBe(2.5);
+		expect(spec.risk_policy.sandbox_only).toBe(true);
+		expect(spec.risk_policy.requires_approval).toBe(true);
+		expect(spec.constraints.metric_floors.pass_rate).toBe(0.9);
+		expect(spec.constraints.metric_ceilings).toEqual({});
 	});
 });

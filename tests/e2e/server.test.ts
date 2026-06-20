@@ -8,11 +8,60 @@ import { resolve } from "node:path";
 
 const SERVER_PATH = resolve(import.meta.dir, "../../src/index.ts");
 
+interface JsonRpcMessage {
+	id?: number | string;
+	result?: unknown;
+	error?: unknown;
+}
+
+function parseJsonRpcMessages(buffer: string): JsonRpcMessage[] {
+	return buffer
+		.trim()
+		.split("\n")
+		.filter(Boolean)
+		.flatMap((line) => {
+			try {
+				return [JSON.parse(line) as JsonRpcMessage];
+			} catch {
+				return [];
+			}
+		});
+}
+
 describe("MCP Server E2E", () => {
 	let child: ReturnType<typeof spawn>;
 	let stdoutBuffer = "";
 	let stderrBuffer = "";
 	let initialized = false;
+
+	async function waitForJsonRpcResponse(
+		id: number,
+		timeoutMs = 3_000,
+	): Promise<JsonRpcMessage> {
+		const deadline = Date.now() + timeoutMs;
+
+		while (Date.now() < deadline) {
+			const message = parseJsonRpcMessages(stdoutBuffer).find(
+				(candidate) => candidate.id === id,
+			);
+
+			if (message) {
+				return message;
+			}
+
+			await new Promise((resolve) => setTimeout(resolve, 25));
+		}
+
+		throw new Error(
+			[
+				`Timed out waiting for JSON-RPC response id ${id}`,
+				"--- stdout ---",
+				stdoutBuffer,
+				"--- stderr ---",
+				stderrBuffer,
+			].join("\n"),
+		);
+	}
 
 	beforeAll(async () => {
 		child = spawn("bun", ["run", SERVER_PATH], {
@@ -43,27 +92,9 @@ describe("MCP Server E2E", () => {
 			},
 		};
 
-		// Wait a moment for server to start
-		await new Promise((r) => setTimeout(r, 500));
-
 		child.stdin?.write(`${JSON.stringify(initRequest)}\n`);
-
-		// Wait for response
-		await new Promise((r) => setTimeout(r, 500));
-
-		// Check if we got a response
-		const lines = stdoutBuffer.trim().split("\n");
-		for (const line of lines) {
-			try {
-				const msg = JSON.parse(line);
-				if (msg.id === 1 && msg.result) {
-					initialized = true;
-					break;
-				}
-			} catch {
-				// not JSON, ignore
-			}
-		}
+		const response = await waitForJsonRpcResponse(1);
+		initialized = Boolean(response.result);
 	});
 
 	afterAll(() => {
@@ -90,37 +121,21 @@ describe("MCP Server E2E", () => {
 		};
 
 		child.stdin?.write(`${JSON.stringify(request)}\n`);
-		await new Promise((r) => setTimeout(r, 500));
+		const msg = await waitForJsonRpcResponse(2);
+		const result = msg.result as { tools?: Array<{ name: string }> };
 
-		const lines = stdoutBuffer.trim().split("\n");
-		let foundResponse = false;
-		for (const line of lines) {
-			try {
-				const msg = JSON.parse(line);
-				if (msg.id === 2 && msg.result && msg.result.tools) {
-					foundResponse = true;
-					expect(Array.isArray(msg.result.tools)).toBe(true);
-					expect(msg.result.tools.length).toBeGreaterThanOrEqual(1);
+		expect(Array.isArray(result.tools)).toBe(true);
+		expect(result.tools?.length).toBeGreaterThanOrEqual(1);
 
-					// Verify expected tools exist
-					const toolNames = msg.result.tools.map(
-						(t: { name: string }) => t.name,
-					);
-					expect(toolNames).toContain("search_techniques");
-					expect(toolNames).toContain("get_technique");
-					expect(toolNames).toContain("suggest_technique");
-					expect(toolNames).toContain("register_experiment");
-					expect(toolNames).toContain("log_result");
-					expect(toolNames).toContain("scaffold_experiment");
-					expect(toolNames).toContain("log_technique_outcome");
-					break;
-				}
-			} catch {
-				// not JSON or wrong format
-			}
-		}
-
-		expect(foundResponse).toBe(true);
+		// Verify expected tools exist
+		const toolNames = result.tools?.map((t) => t.name) ?? [];
+		expect(toolNames).toContain("search_techniques");
+		expect(toolNames).toContain("get_technique");
+		expect(toolNames).toContain("suggest_technique");
+		expect(toolNames).toContain("register_experiment");
+		expect(toolNames).toContain("log_result");
+		expect(toolNames).toContain("scaffold_experiment");
+		expect(toolNames).toContain("log_technique_outcome");
 	});
 
 	it("server process stays alive", () => {

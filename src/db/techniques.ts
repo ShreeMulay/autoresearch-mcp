@@ -49,7 +49,7 @@ export function upsertCatalogItem(
 		$when_not_to_use: item.when_not_to_use ?? null,
 		$core_pattern: item.core_pattern ?? null,
 		$source: item.source ?? null,
-		$tags: JSON.stringify(item.tags),
+		$tags: JSON.stringify(normalizeTags(item.tags)),
 		$related: JSON.stringify(item.related),
 		$examples: JSON.stringify(item.examples),
 		$composes: item.composes ? JSON.stringify(item.composes) : null,
@@ -182,7 +182,7 @@ function buildTagFilter(
 	if (!tags?.length) return "";
 
 	const clauses: string[] = [];
-	tags.forEach((tag, index) => {
+	normalizeTags(tags).forEach((tag, index) => {
 		const paramName = `$tag${index}`;
 		clauses.push(
 			` AND EXISTS (SELECT 1 FROM json_each(${tableAlias}.tags) WHERE value = ${paramName})`,
@@ -191,6 +191,16 @@ function buildTagFilter(
 	});
 
 	return clauses.join("");
+}
+
+export function normalizeTag(tag: string): string {
+	return tag.trim().toLowerCase();
+}
+
+export function normalizeTags(tags: string[]): string[] {
+	return Array.from(
+		new Set(tags.map(normalizeTag).filter((tag) => tag.length > 0)),
+	);
 }
 
 // ============================================================
