@@ -120,4 +120,19 @@ describe("JSON tag filtering", () => {
 		const results = listCatalogItems({ tags: ["cost_%"] });
 		expect(results.map((item) => item.id)).toEqual(["literal"]);
 	});
+
+	it("normalizes stored and queried tag casing", () => {
+		upsertCatalogItem(
+			makeItem("mixed", { tags: ["LLM", "GPU", "llm"] }),
+			"hash-mixed",
+			"yaml-mixed",
+		);
+
+		const listed = listCatalogItems({ tags: ["llm"] });
+		const searched = searchCatalog("Description", { tags: ["GPU"] });
+
+		expect(listed.map((item) => item.id)).toEqual(["mixed"]);
+		expect(searched.map((item) => item.id)).toContain("mixed");
+		expect(listed[0]?.tags).toEqual(["llm", "gpu"]);
+	});
 });

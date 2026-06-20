@@ -9,11 +9,15 @@ import {
 	updateExperiment,
 } from "../db/experiments.js";
 import {
+	BudgetSchema,
+	ConstraintsSchema,
 	type Experiment,
 	type ExperimentResult,
 	type ExperimentSpec,
 	RecipeId,
+	RiskPolicySchema,
 } from "../types.js";
+import { inferArtifactType } from "./artifacts.js";
 
 const RESULT_DISPLAY_CAP = 200;
 
@@ -38,6 +42,13 @@ export function registerExperimentTools(mcp: McpServer): void {
 				.default("LLM edit")
 				.describe("How mutations are proposed"),
 			recipe_id: RecipeId.optional().describe("Optional recipe ID"),
+			budget: BudgetSchema.optional().describe("Optional experiment budget"),
+			risk_policy: RiskPolicySchema.optional().describe(
+				"Optional execution risk policy",
+			),
+			constraints: ConstraintsSchema.optional().describe(
+				"Optional metric floor and ceiling constraints",
+			),
 			notes: z.string().optional().describe("Optional experiment notes"),
 		},
 		async ({
@@ -49,6 +60,9 @@ export function registerExperimentTools(mcp: McpServer): void {
 			evaluator_command,
 			mutation_strategy,
 			recipe_id,
+			budget,
+			risk_policy,
+			constraints,
 			notes,
 		}) => {
 			try {
@@ -60,6 +74,9 @@ export function registerExperimentTools(mcp: McpServer): void {
 					evaluatorCommand: evaluator_command,
 					mutationStrategy: mutation_strategy,
 					recipeId: recipe_id,
+					budget,
+					riskPolicy: risk_policy,
+					constraints,
 				});
 
 				createExperiment({
@@ -444,13 +461,16 @@ export function registerExperimentTools(mcp: McpServer): void {
 	);
 }
 
-function buildExperimentSpec(args: {
+export function buildExperimentSpec(args: {
 	targetArtifact: string;
 	metricName: string;
 	metricDirection: "minimize" | "maximize";
 	evaluatorCommand: string;
 	mutationStrategy: string;
 	recipeId?: ExperimentSpec["recipe_id"];
+	budget?: ExperimentSpec["budget"];
+	riskPolicy?: ExperimentSpec["risk_policy"];
+	constraints?: ExperimentSpec["constraints"];
 }): ExperimentSpec {
 	return {
 		target_artifact: args.targetArtifact,
@@ -465,61 +485,12 @@ function buildExperimentSpec(args: {
 		metric_name: args.metricName,
 		metric_direction: args.metricDirection,
 		acceptance_rule: "strict-improvement",
-		budget: {},
+		budget: BudgetSchema.parse(args.budget ?? {}),
 		environment: {},
 		stopping_conditions: ["budget-exhaustion"],
-		risk_policy: {
-			sandbox_only: false,
-			requires_approval: false,
-			network_denied: true,
-			secrets_denied: true,
-		},
-		constraints: {
-			metric_floors: {},
-			metric_ceilings: {},
-		},
+		risk_policy: RiskPolicySchema.parse(args.riskPolicy ?? {}),
+		constraints: ConstraintsSchema.parse(args.constraints ?? {}),
 	};
-}
-
-function inferArtifactType(
-	targetArtifact: string,
-): ExperimentSpec["artifact_type"] {
-	const normalized = targetArtifact.toLowerCase();
-
-	if (normalized.includes("prompt")) {
-		return "prompt";
-	}
-
-	if (
-		normalized.endsWith(".ts") ||
-		normalized.endsWith(".tsx") ||
-		normalized.endsWith(".js") ||
-		normalized.endsWith(".jsx") ||
-		normalized.endsWith(".py") ||
-		normalized.endsWith(".rs") ||
-		normalized.endsWith(".go")
-	) {
-		return "code";
-	}
-
-	if (
-		normalized.endsWith(".json") ||
-		normalized.endsWith(".yaml") ||
-		normalized.endsWith(".yml") ||
-		normalized.endsWith(".toml")
-	) {
-		return "config";
-	}
-
-	if (
-		normalized.endsWith(".md") ||
-		normalized.endsWith(".txt") ||
-		normalized.endsWith(".html")
-	) {
-		return "content";
-	}
-
-	return "other";
 }
 
 function formatExperimentMarkdown(

