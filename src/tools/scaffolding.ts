@@ -392,22 +392,6 @@ function buildFailClosedEvalTemplate(args: { metricName: string }): string {
 	);
 }
 
-function buildDefaultEvalTemplate(args: { metricName: string }): string {
-	return joinText(
-		[
-			"#!/usr/bin/env bash",
-			"set -euo pipefail",
-			"",
-			"# Replace this stub with the real evaluator for the metric below.",
-			joinText("# Metric: ", sanitizeInline(args.metricName)),
-			"# Contract: print exactly one numeric score to stdout.",
-			"",
-			"printf '%s\\n' '0'",
-		].join("\n"),
-		"\n",
-	);
-}
-
 function buildResultsTemplate(): string {
 	return joinText(
 		[
@@ -429,7 +413,7 @@ function buildDefaultTemplate(
 	}
 
 	if (templateName === "eval.sh") {
-		return buildDefaultEvalTemplate({ metricName: "PRIMARY_METRIC" });
+		return buildFailClosedEvalTemplate({ metricName: "PRIMARY_METRIC" });
 	}
 
 	if (templateName === "results.tsv") {

@@ -11,7 +11,8 @@ A full post-merge codebase review (oracle, 2026-06-12) found one security blocke
 - The YAML catalog is the authoritative source for recipe compositions; skill and reference docs are regenerated to match.
 - Server runtime requires Bun; the skill installer requires Node >= 20.19. Both are declared in `engines` and documented.
 - First npm release will be `0.4.0` (0.3.0 was never published).
-- Deferred to follow-up beads: budget/risk/constraints tool exposure, real zod-to-json-schema conversion, missing recipe templates, minor polish.
+- Follow-up backlog bead `autoresearch-mcp-46d` has been completed: budget/risk/constraints exposure, real zod-to-json-schema conversion, missing recipe templates, artifact inference reuse, tag normalization, E2E readiness polling, and Biome configuration are landed.
+- Final release hygiene before npm publish MUST remove all fake-score evaluator fallbacks, verify the package contents from a packed tarball, and archive completed OpenSpec changes.
 
 ## What Changes
 
@@ -43,3 +44,18 @@ A full post-merge codebase review (oracle, 2026-06-12) found one security blocke
 - [x] PR #8 merged to `main` (squash `a971c0a`) with CI green on Bun 1.3.10, Bun latest, Node 20, Node 22.
 - [ ] npm publish `0.4.0` (`--access public`) and registry smoke verified. BLOCKED: requires interactive `bunx npm login` by the operator; tracked in Beads.
 - [x] Forgejo repo `thekidneyexperts/autoresearch-mcp` created (public), `main` pushed at `a971c0a`, branch protection restored (no direct push, 1 approval, woodpecker context), GitHub configured as push mirror with sync_on_commit.
+- [x] Woodpecker CI activated on Forgejo and `.woodpecker.yml` landed. Required status context corrected to `ci/woodpecker/pr/woodpecker`; Forgejo Actions disabled for this repo.
+- [x] Deferred review backlog landed via Forgejo PR #3 (`be1247d`): missing recipe templates, real zod-to-json-schema, budget/risk/constraints exposure, shared artifact inference, tag normalization, E2E readiness polling, and Biome config.
+- [ ] Final release hygiene PR: remove/fail-close the remaining fake-score `get_template` fallback, add regression coverage, update CHANGELOG for PR #3/final fix, resolve AGENTS.md observability guidance, archive completed v0.3.0 OpenSpec, and run quality/package gates.
+
+## Close Criteria
+
+This change can be archived only after all of the following are true:
+
+- Final release hygiene PR is merged through Forgejo with Woodpecker green.
+- `bun test`, `bun run typecheck`, `bun run lint`, and `bun run build` pass on the release commit.
+- Packed-package audit/smoke proves runtime files are included and local DBs/secrets/worktree files are excluded.
+- `autoresearch-mcp@0.4.0` is published to npm.
+- Registry smoke verifies the server bin and skill installer from the published package.
+- Git tag `v0.4.0` exists on Forgejo and the GitHub mirror.
+- Bead `autoresearch-mcp-7qa` is closed.

@@ -47,6 +47,20 @@ afterAll(async () => {
 });
 
 describe("published package bins", () => {
+	it("ships only runtime package content and excludes local artifacts", () => {
+		const files = packageJson.files as string[];
+
+		expect(files).toContain("bin/");
+		expect(files).toContain("src/");
+		expect(files).toContain("catalog/");
+		expect(files).toContain("skills/");
+		expect(files).toContain("scripts/");
+		expect(files).not.toContain("data/");
+		expect(files).not.toContain("autoresearch/");
+		expect(files).not.toContain("examples/");
+		expect(files).not.toContain(".slim/");
+	});
+
 	it("uses real executable wrapper files for both public bins", async () => {
 		const bins = packageJson.bin as Record<string, string>;
 

@@ -10,10 +10,12 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getExperiment } from "../../src/db/experiments.js";
 import { loadCatalog } from "../../src/db/load-catalog.js";
 import { resetDb } from "../../src/db/schema.js";
+import { upsertCatalogItem } from "../../src/db/techniques.js";
 import {
 	registerScaffoldingTools,
 	resolveTemplatePath,
 } from "../../src/tools/scaffolding.js";
+import type { CatalogItem } from "../../src/types.js";
 
 interface ScaffoldArgs {
 	recipe_id: string;
@@ -46,6 +48,10 @@ interface ToolResult {
 }
 
 type ScaffoldHandler = (args: ScaffoldArgs) => Promise<ToolResult>;
+type GetTemplateHandler = (args: {
+	recipe_id: string;
+	template_name: string;
+}) => Promise<ToolResult>;
 
 const tempDirs: string[] = [];
 
@@ -79,6 +85,25 @@ function scaffoldHandler(): ScaffoldHandler {
 	const handler = handlers.get("scaffold_experiment");
 	if (!handler) {
 		throw new Error("scaffold_experiment handler was not registered");
+	}
+
+	return handler;
+}
+
+function getTemplateHandler(): GetTemplateHandler {
+	const handlers = new Map<string, GetTemplateHandler>();
+	const mcp = {
+		tool: (...args: unknown[]) => {
+			const [name, , , handler] = args;
+			handlers.set(name as string, handler as GetTemplateHandler);
+		},
+	} as McpServer;
+
+	registerScaffoldingTools(mcp);
+
+	const handler = handlers.get("get_template");
+	if (!handler) {
+		throw new Error("get_template handler was not registered");
 	}
 
 	return handler;
@@ -160,6 +185,35 @@ describe("scaffold_experiment hardening", () => {
 });
 
 describe("scaffold_experiment templates", () => {
+	it("returns a fail-closed eval template when no curated eval template exists", async () => {
+		const recipe: CatalogItem = {
+			id: "missing-template-recipe",
+			name: "Missing Template Recipe",
+			layer: "recipe",
+			description: "Recipe fixture with no bundled templates.",
+			when_to_use: "Use only in tests.",
+			tags: ["test"],
+			related: [],
+			examples: [],
+			composes: {
+				search_strategy: "hill-climbing",
+				evaluator: "benchmark-harness",
+				execution_pattern: "single-ratchet",
+			},
+		};
+		upsertCatalogItem(recipe, "fixture-hash", "id: missing-template-recipe");
+
+		const result = await getTemplateHandler()({
+			recipe_id: recipe.id,
+			template_name: "eval.sh",
+		});
+
+		expect(result.isError).not.toBe(true);
+		expect(result.content[0].text).toContain("placeholder evaluator");
+		expect(result.content[0].text).toContain("exit 1");
+		expect(result.content[0].text).not.toContain("printf '%s\\n' '0'");
+	});
+
 	it("uses curated templates for recipes that ship them", async () => {
 		const projectDir = await tempProjectDir();
 		const curatedEval = await readFile(
