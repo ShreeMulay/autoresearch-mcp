@@ -64,9 +64,9 @@ describe("published package bins", () => {
 	it("uses real executable wrapper files for both public bins", async () => {
 		const bins = packageJson.bin as Record<string, string>;
 
-		expect(bins["autoresearch-mcp"]).toBe("./bin/autoresearch-mcp");
+		expect(bins["autoresearch-mcp"]).toBe("bin/autoresearch-mcp");
 		expect(bins["autoresearch-install-skill"]).toBe(
-			"./bin/autoresearch-install-skill",
+			"bin/autoresearch-install-skill",
 		);
 
 		for (const binPath of Object.values(bins)) {

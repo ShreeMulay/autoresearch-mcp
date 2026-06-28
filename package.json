@@ -8,7 +8,7 @@
   "homepage": "https://github.com/shreemulay/autoresearch-mcp",
   "repository": {
     "type": "git",
-    "url": "https://github.com/shreemulay/autoresearch-mcp.git"
+    "url": "git+https://github.com/shreemulay/autoresearch-mcp.git"
   },
   "bugs": {
     "url": "https://github.com/shreemulay/autoresearch-mcp/issues"
@@ -29,8 +29,8 @@
     "claude-code"
   ],
   "bin": {
-    "autoresearch-mcp": "./bin/autoresearch-mcp",
-    "autoresearch-install-skill": "./bin/autoresearch-install-skill"
+    "autoresearch-mcp": "bin/autoresearch-mcp",
+    "autoresearch-install-skill": "bin/autoresearch-install-skill"
   },
   "files": [
     "bin/",
