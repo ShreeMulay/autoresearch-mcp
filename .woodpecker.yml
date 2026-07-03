@@ -61,3 +61,19 @@ steps:
           exit 1
         fi
       - rm -rf "$SANDBOX"
+# Advisory AI PR review via host-side broker (auto-rollout).
+  # See forgejo-infra grob/README.md. Never merge-blocking.
+  ai-review:
+    image: curlimages/curl:8.11.1
+    failure: ignore
+    environment:
+      REVIEW_BROKER_KEY:
+        from_secret: review_broker_key
+    commands:
+      - |
+        curl -fsS --max-time 1200 -X POST http://172.17.0.1:23459/review \
+          -H "Authorization: Bearer $${REVIEW_BROKER_KEY}" \
+          -H "Content-Type: application/json" \
+          -d "{\"repo\":\"$${CI_REPO}\",\"pr_number\":$${CI_COMMIT_PULL_REQUEST}}"
+    when:
+      - event: pull_request
