@@ -2,7 +2,7 @@
 
 ## Current State (v0.4.0, Unreleased)
 
-MCP server implementing Karpathy's autoresearch pattern as a composable technique catalog with experiment tracking. Version 0.4.0 is the planned first npm release, but it remains unpublished and untagged pending integrity remediation and npm authentication.
+MCP server implementing Karpathy's autoresearch pattern as a composable technique catalog with experiment tracking. Version 0.4.0 is the planned first npm release. Integrity remediation and protected package/CI landing are complete, but the version remains unpublished and untagged pending npm authentication and registry closeout.
 
 ### What's Working
 - **Catalog**: 30 YAML techniques across 4 layers (8 strategies, 8 evaluators, 6 patterns, 8 recipes)
@@ -31,10 +31,9 @@ MCP server implementing Karpathy's autoresearch pattern as a composable techniqu
 - `autoresearch/self-optimize/`: Self-optimization evaluators
 
 ### In Progress
-- v0.4.0 integrity remediation, packed-content safety audit, and release-document reconciliation
-- First public npm publication after all integrity gates pass
+- npm authentication and tarball-only first public publication
+- Byte-verifying registry smoke, Forgejo-first tag closeout, and release-state archival
 
 ### Blocked
-- Publication is blocked until integrity remediation and protected package/CI gates pass.
-- npm publication requires operator authentication.
-- No `v0.4.0` tag may be created before the tested package is published and registry smoke succeeds.
+- npm publication requires operator authentication from approved external user-level npm configuration.
+- No `v0.4.0` tag or OpenSpec archive may be created before the exact tarball is published and byte-verifying registry smoke succeeds.
