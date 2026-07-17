@@ -6,7 +6,7 @@ body:
     id: technique_name
     attributes:
       label: Technique name
-      placeholder: Example: adaptive-sampling
+      placeholder: "Example: adaptive-sampling"
     validations:
       required: true
 
@@ -45,6 +45,6 @@ body:
     attributes:
       label: Related techniques
       description: Optional. List related technique IDs or names.
-      placeholder: Example: hill-climbing, single-ratchet
+      placeholder: "Example: hill-climbing, single-ratchet"
     validations:
       required: false
