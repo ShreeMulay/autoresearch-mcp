@@ -220,11 +220,29 @@ describe("closed release artifact", () => {
 			expect(control.stderr.toString()).toMatch(/schema|registry read policy/i);
 
 			const fakeGit = join(copiedRoot, "git");
+			const fakeNode = join(copiedRoot, "node");
 			const fakeNpm = join(copiedRoot, "npm");
 			await Promise.all([
 				writeFile(
 					fakeGit,
 					"#!/bin/sh\nprintf '1111111111111111111111111111111111111111\\n'\n",
+					{ mode: 0o755 },
+				),
+				writeFile(
+					fakeNode,
+					`#!/bin/sh
+if [ "\${1:-}" = --version ]; then printf 'v22.22.1\\n'; exit 0; fi
+if [ "\${1:-}" = -p ] && [ "\${2:-}" = "require('${copiedRoot}/package.json').version" ]; then printf '0.4.0\\n'; exit 0; fi
+if [ "\${1:-}" = - ]; then
+  shift
+  script="$(mktemp /tmp/release-node-shim.XXXXXX)" || exit $?
+  trap 'rm -f "$script"' EXIT HUP INT TERM
+  cat > "$script" || exit $?
+  bun "$script" "$@"
+  exit $?
+fi
+exit 64
+`,
 					{ mode: 0o755 },
 				),
 				writeFile(
@@ -238,9 +256,7 @@ describe("closed release artifact", () => {
 					...process.env,
 					PATH: `${copiedRoot}:${process.env.PATH ?? ""}`,
 					EXPECTED_BUN_VERSION: Bun.version,
-					EXPECTED_NODE_VERSION: Bun.spawnSync(["node", "--version"])
-						.stdout.toString()
-						.trim(),
+					EXPECTED_NODE_VERSION: "v22.22.1",
 					EXPECTED_NPM_VERSION: "10.9.4",
 				},
 			});
