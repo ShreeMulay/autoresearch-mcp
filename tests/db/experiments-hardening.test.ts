@@ -112,7 +112,8 @@ describe("experiment result idempotency", () => {
 			cost_tokens: 100,
 			duration_seconds: 5,
 			experiment_id: "exp-retry",
-			improved: true,
+			improved: false,
+			is_baseline: true,
 			iteration: 1,
 			score: 10,
 		});
@@ -122,7 +123,8 @@ describe("experiment result idempotency", () => {
 			cost_tokens: 200,
 			duration_seconds: 7,
 			experiment_id: "exp-retry",
-			improved: true,
+			improved: false,
+			is_baseline: true,
 			iteration: 1,
 			score: 12,
 		});
@@ -134,7 +136,7 @@ describe("experiment result idempotency", () => {
 
 		const experiment = getExperiment("exp-retry");
 		expect(experiment?.total_iterations).toBe(1);
-		expect(experiment?.successful_iterations).toBe(1);
+		expect(experiment?.successful_iterations).toBe(0);
 		expect(experiment?.best_score).toBe(12);
 		expect(experiment?.cost_tokens).toBe(200);
 		expect(experiment?.cost_dollars).toBe(0.02);
@@ -152,6 +154,7 @@ describe("experiment result idempotency", () => {
 			change_description: "First attempt",
 			experiment_id: "exp-retry-baseline",
 			improved: false,
+			is_baseline: true,
 			iteration: 0,
 			score: 10,
 		});
@@ -181,7 +184,7 @@ describe("experiment result idempotency", () => {
 			logExperimentResult({
 				change_description: `Change ${iteration}`,
 				experiment_id: "exp-many-results",
-				improved: false,
+				...(iteration === 0 ? { is_baseline: true } : {}),
 				iteration,
 				score: iteration,
 			});

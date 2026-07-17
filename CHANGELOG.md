@@ -5,11 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0] - 2026-06-12
+## [0.4.0] - Unreleased
 
-First published npm release. Versions 0.1.0 through 0.3.0 were never published to a registry.
+Planned first npm release. Versions 0.1.0 through 0.3.0 were never published to a registry. Version 0.4.0 remains pending integrity remediation and npm authentication; it has not been published or tagged.
 
 ### Security
+
+- **Shipped-content data boundary** — public guidance now requires synthetic, non-sensitive examples and prohibits PHI, patient identifiers, PHI-bearing prompts or model responses, clinical records, secrets, and production datasets in the MCP server, evaluators, review tooling, logs, fixtures, and CI.
+- **Nonclinical examples** — patient-specific and clinical automation examples were replaced with synthetic product, inventory, publishing, and research workflows.
+
+### Earlier security work
 
 - **Sanitized generated scaffold content** — all user-provided strings (metric name, target file, project name) are stripped of newlines and control characters before being written into generated `eval.sh`, `program.md`, and `results.tsv`. Prevents shell injection through a multiline `metric_name` reaching an executable script.
 - **Removed the last fake-score evaluator fallback** — `get_template` now returns a fail-closed `eval.sh` placeholder for recipes without a curated evaluator template instead of emitting `printf '0'`. This preserves the evaluator contract and prevents future recipes from accidentally logging fake improvements.
@@ -23,7 +28,7 @@ First published npm release. Versions 0.1.0 through 0.3.0 were never published t
 - **Curated scaffold templates** — `scaffold_experiment` now uses the recipe templates bundled under `catalog/templates/<recipe>/` when present, and appends an experiment metadata section.
 - **Complete curated recipe template coverage** — `test-amplification`, `ml-training`, and `literature-synthesis` now ship recipe-specific `program.md` and `eval.sh` templates alongside the existing templates.
 - **Fail-closed placeholder evaluator** — recipes without a curated template scaffold an `eval.sh` that exits 1 with a clear message instead of printing a fake `0` score.
-- **`engines.node >= 20.19`** — declares the Node requirement for the skill installer alongside the existing Bun requirement for the server.
+- **Runtime declarations** — the standalone skill installer supports Node.js 22 and 24, while the MCP server requires Bun >= 1.3.10.
 - **Catalog loader strictness** — duplicate technique IDs and YAML layer/directory mismatches are reported as load errors; the bundled catalog is regression-tested to load with zero errors.
 - **Real JSON Schema conversion** — schema resources now use `zod-to-json-schema` rather than a simplified placeholder conversion.
 
@@ -37,7 +42,7 @@ First published npm release. Versions 0.1.0 through 0.3.0 were never published t
 - **Experiment spec surface** — `register_experiment` and `scaffold_experiment` expose and persist budget, risk policy, and metric constraints.
 - **Artifact typing and tags** — artifact type inference is shared across experiment registration/scaffolding, and catalog tags are normalized on write/filter for consistent matching.
 - **Skill synchronized with catalog** — recipe compositions in `SKILL.md` and the reference docs now match the shipped YAML catalog (the catalog is authoritative); removed a reference to a nonexistent `tree-search` strategy; the tool mapping covers all 12 tools.
-- **CI and tests** — Bun pinned-minimum plus latest matrix, a Node 20/22 job for the installer bin, dynamic tarball naming, packed-install smoke for MCP `tools/list`, committed Biome config, and E2E readiness polling instead of fixed sleeps.
+- **CI and tests** — Bun pinned-minimum plus latest coverage, standalone installer coverage on supported Node.js 22 and 24, dynamic tarball naming, packed-install smoke for MCP `tools/list`, committed Biome config, and E2E readiness polling instead of fixed sleeps.
 
 ## [0.3.0] - 2026-05-07
 

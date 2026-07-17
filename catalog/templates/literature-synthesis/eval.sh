@@ -9,18 +9,13 @@ set -euo pipefail
 TARGET_FILE="${1:-synthesis.md}"
 
 if [[ -f "$TARGET_FILE" ]]; then
-  python - "$TARGET_FILE" <<'PY'
-import re
-import sys
-from pathlib import Path
-text = Path(sys.argv[1]).read_text(encoding='utf-8')
-words = len(re.findall(r'\w+', text))
-citations = len(re.findall(r'\[[^\]]+\]|\([^)]*\d{4}[^)]*\)', text))
-if words == 0:
-    print(0.0)
-else:
-    print(round(min(1.0, citations / max(1, words / 250)), 4))
-PY
+  AUTORESEARCH_TARGET_FILE="$TARGET_FILE" bun -e '
+    const text = await Bun.file(process.env.AUTORESEARCH_TARGET_FILE).text();
+    const words = text.match(/\w+/g)?.length ?? 0;
+    const citations = text.match(/\[[^\]]+\]|\([^)]*\d{4}[^)]*\)/g)?.length ?? 0;
+    const score = words === 0 ? 0 : Math.min(1, citations / Math.max(1, words / 250));
+    console.log(Number(score.toFixed(4)));
+  '
   exit 0
 fi
 

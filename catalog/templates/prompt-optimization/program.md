@@ -8,6 +8,9 @@ You are running a bounded ratchet on a prompt file.
 Your job is to edit the target prompt, run the evaluator, study the result, and keep any change that improves the score.
 Treat the current best prompt as the baseline to beat.
 
+## Data Safety
+Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, clinical records, secrets, PHI-bearing prompts or model responses, or production datasets to the server, evaluator, review tooling, logs, fixtures, or CI.
+
 ## Target
 - Primary artifact: the target prompt file for this task
 - Secondary artifacts: notes, scratch files, or candidate variants if useful

@@ -1,6 +1,6 @@
 # OpenSpec: Autoresearch Skill + Tests + Release v0.2.0
 
-## Status: APPROVED
+## Status: COMPLETED WITHOUT v0.2.0 PUBLICATION
 ## Change ID: skill-phase-2
 
 ---
@@ -16,29 +16,28 @@ The MCP server provides tools and state (SQLite catalog, experiment tracking) bu
 ## Acceptance Criteria
 
 ### Skill
-- [ ] `skills/autoresearch/SKILL.md` exists with YAML frontmatter (name, description)
-- [ ] SKILL.md includes: trigger phrases, decision tree, core workflows, MCP tool mapping, composition rules, anti-patterns, quick reference table of all 30 techniques
-- [ ] `references/technique-index.md`: compact 30-item reference
-- [ ] `references/composition-patterns.md`: strategy-evaluator compatibility matrix + custom recipe building
-- [ ] `references/workflow-examples.md`: 3 end-to-end examples (prompt optimization, API latency, overnight batch)
-- [ ] Description ≤ 1024 characters for Claude Code compatibility
+- [x] `skills/autoresearch/SKILL.md` exists with YAML frontmatter (name, description)
+- [x] SKILL.md includes: trigger phrases, decision tree, core workflows, MCP tool mapping, composition rules, anti-patterns, quick reference table of all 30 techniques
+- [x] `references/technique-index.md`: compact 30-item reference
+- [x] `references/composition-patterns.md`: strategy-evaluator compatibility matrix + custom recipe building
+- [x] `references/workflow-examples.md`: 3 end-to-end examples (prompt optimization, API latency, overnight batch)
+- [x] Description ≤ 1024 characters for Claude Code compatibility
 
 ### Tests
-- [ ] `tests/db/techniques.test.ts`: Test catalog CRUD (search, list, stats, get) with in-memory SQLite
-- [ ] `tests/db/experiments.test.ts`: Test experiment CRUD (create, update, log results, list) with in-memory SQLite
-- [ ] `tests/tools/experiments.test.ts`: Test helper functions (spec builder, formatters) from experiments.ts
-- [ ] All tests pass with `bun test`
+- [x] `tests/db/techniques.test.ts`: Test catalog CRUD (search, list, stats, get) with in-memory SQLite
+- [x] `tests/db/experiments.test.ts`: Test experiment CRUD (create, update, log results, list) with in-memory SQLite
+- [x] `tests/tools/experiments.test.ts`: Test helper functions (spec builder, formatters) from experiments.ts
+- [x] All tests pass with `bun test`
 
 ### Package
-- [ ] `package.json`: `files` array includes `skills/`, version bumped to `0.2.0`
-- [ ] `scripts/install-skill.js`: Cross-platform skill installation (OpenCode, Claude Code, pi.dev)
-- [ ] `README.md`: Skill install instructions for all 3 platforms
+- [x] `package.json`: `files` array includes `skills/`, version bumped to `0.2.0`
+- [x] `scripts/install-skill.js`: Cross-platform skill installation (OpenCode, Claude Code, pi.dev)
+- [x] `README.md`: Skill install instructions for all 3 platforms
 
 ### Release
-- [ ] All changes committed to `feat/skill-and-tests` branch
-- [ ] PR created and merged to `main`
-- [ ] `npm publish` succeeds (v0.2.0)
-- [ ] `npx autoresearch-mcp` works from fresh install
+- [x] Implementation landed and was later superseded by subsequent hardening releases.
+- [ ] `npm publish` succeeds (v0.2.0) — intentionally not completed; the planned first public release is now v0.4.0.
+- [ ] `npx autoresearch-mcp` works from fresh registry install — deferred to the first public release smoke test.
 
 ## Design Decisions
 

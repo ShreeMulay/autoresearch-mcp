@@ -37,10 +37,10 @@ examples:
     description: Improve onboarding guides across a full docs section.
     metric: Aggregate rubric score for clarity, completeness, and actionability.
     result: A stronger revision policy raises quality and consistency across the set.
-  - domain: patient education
-    description: Revise educational handouts on related kidney-care topics.
-    metric: Reading-level compliance plus rubric scores for empathy and accuracy.
-    result: The batch becomes more uniform and easier for patients to understand.
+  - domain: community education
+    description: Revise synthetic recycling guides for several neighborhood programs.
+    metric: Reading-level compliance plus rubric scores for clarity and accuracy.
+    result: The batch becomes more uniform and easier for residents to understand.
 estimated_cost: $0.10-$0.30 per experiment
 experiments_per_hour: 6
 requires_gpu: false

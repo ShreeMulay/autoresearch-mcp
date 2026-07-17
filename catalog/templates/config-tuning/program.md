@@ -21,6 +21,7 @@ Use disciplined parameter changes, measure outcomes, and keep the best valid con
 ## Validity Rule
 Keep configs valid at all times.
 Do not leave broken syntax, missing required fields, or impossible parameter combinations.
+Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, clinical records, secrets, PHI-bearing prompts or model responses, or production datasets to the server, evaluator, review tooling, logs, fixtures, or CI.
 
 ## Search Style
 Use a systematic search process.

@@ -61,7 +61,7 @@ const TEST_PROBLEMS: Array<{
     acceptable_recipes: ["config-tuning", "code-performance"],
   },
   {
-    problem: "Improve our medical Q&A prompt against clinical eval set",
+    problem: "Improve our product-support Q&A prompt against a synthetic eval set",
     expected_recipe: "prompt-optimization",
     acceptable_recipes: ["prompt-optimization"],
   },

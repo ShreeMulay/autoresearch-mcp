@@ -6,6 +6,9 @@ Improve the target artifact by adding or strengthening tests that catch real reg
 ## Mission
 Use this recipe when the main artifact is a codebase, package, or behavior contract and the metric rewards better defect detection, coverage, mutation score, or regression confidence.
 
+## Data Safety
+Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, clinical records, secrets, PHI-bearing prompts or model responses, or production datasets to the server, evaluator, review tooling, logs, fixtures, or CI.
+
 ## Target
 - Primary artifact: the tests around the selected behavior
 - Supporting artifact: the implementation under test, read-only unless the evaluator proves the test exposed a real defect

@@ -14,6 +14,7 @@ import {
 	type Experiment,
 	type ExperimentResult,
 	type ExperimentSpec,
+	type ExperimentStatus,
 	RecipeId,
 	RiskPolicySchema,
 } from "../types.js";
@@ -151,24 +152,12 @@ export function registerExperimentTools(mcp: McpServer): void {
 				}
 
 				const updates: {
-					status?: string;
-					started_at?: string;
-					completed_at?: string;
+					status?: ExperimentStatus;
 					notes?: string;
 				} = {};
 
 				if (status !== undefined) {
 					updates.status = status;
-
-					if (status !== existing.status) {
-						if (status === "running") {
-							updates.started_at = new Date().toISOString();
-						}
-
-						if (status === "completed" || status === "failed") {
-							updates.completed_at = new Date().toISOString();
-						}
-					}
 				}
 
 				if (notes !== undefined) {
@@ -236,7 +225,10 @@ export function registerExperimentTools(mcp: McpServer): void {
 			score: z.number().describe("Observed score"),
 			improved: z
 				.boolean()
-				.describe("Whether this iteration improved the champion"),
+				.optional()
+				.describe(
+					"Optional assertion that this iteration improved the champion",
+				),
 			change_description: z
 				.string()
 				.describe("Human-readable description of the attempted change"),
@@ -274,7 +266,7 @@ export function registerExperimentTools(mcp: McpServer): void {
 			is_baseline,
 		}) => {
 			try {
-				logExperimentResult({
+				const logged = logExperimentResult({
 					experiment_id,
 					iteration,
 					score,
@@ -308,7 +300,7 @@ export function registerExperimentTools(mcp: McpServer): void {
 					joinText("Experiment ID: ", inlineCode(experiment.id)),
 					joinText("Iteration: ", String(iteration)),
 					joinText("Score: ", formatNumber(score)),
-					joinText("Improved: ", improved ? "yes" : "no"),
+					joinText("Improved: ", logged.improved ? "yes" : "no"),
 					joinText("Change: ", change_description),
 					"",
 					"## Running Totals",

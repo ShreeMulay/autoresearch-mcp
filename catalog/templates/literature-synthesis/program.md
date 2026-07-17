@@ -6,6 +6,9 @@ Improve a literature synthesis artifact so it becomes more complete, faithful to
 ## Mission
 Use this recipe for review papers, evidence summaries, research briefs, citation-backed memos, and synthesis prompts where the evaluator rewards coverage, faithfulness, and clarity.
 
+## Data Safety
+Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, clinical records, secrets, PHI-bearing prompts or model responses, or production datasets to the server, evaluator, review tooling, logs, fixtures, or CI.
+
 ## Target
 - Primary artifact: synthesis document, outline, prompt, extraction schema, or evidence table
 - Supporting artifacts: source list, notes, citation map, inclusion/exclusion criteria

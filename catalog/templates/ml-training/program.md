@@ -6,6 +6,9 @@ Improve a model training artifact or configuration so the selected validation me
 ## Mission
 Use this recipe for training loops, feature pipelines, hyperparameters, model selection, loss functions, and evaluation harnesses where each experiment has a measurable score.
 
+## Data Safety
+Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, clinical records, secrets, PHI-bearing prompts or model responses, or production datasets to the server, evaluator, review tooling, logs, fixtures, or CI.
+
 ## Target
 - Primary artifact: model config, training script, feature pipeline, or experiment recipe
 - Supporting artifacts: validation data, metrics output, logs, and reproducibility notes

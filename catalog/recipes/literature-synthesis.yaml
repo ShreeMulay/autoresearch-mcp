@@ -33,8 +33,8 @@ composes:
   evaluator: rubric-scorer
   execution_pattern: two-loop
 examples:
-  - domain: clinical research
-    description: Build a structured evidence review from nephrology studies.
+  - domain: software research
+    description: Build a structured evidence review from public database benchmark papers.
     metric: Rubric score for evidence coverage, citation fidelity, and recommendation clarity.
     result: Iterative synthesis improves consistency and reduces omitted findings across papers.
   - domain: market intelligence

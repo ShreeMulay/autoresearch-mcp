@@ -40,6 +40,41 @@ async function runInstallSkillBin(args: string[]) {
 	return { exitCode, stderr, stdout, tempHome };
 }
 
+async function runMainInstallSkill(args: string[], home?: string) {
+	const tempHome =
+		home ?? (await mkdtemp(join(tmpdir(), "autoresearch-main-home-")));
+	if (!home) tempDirs.push(tempHome);
+	const proc = Bun.spawn(
+		["bun", "bin/autoresearch-mcp", "install-skill", ...args],
+		{
+			cwd: repoRoot,
+			env: { ...process.env, HOME: tempHome },
+			stderr: "pipe",
+			stdout: "pipe",
+		},
+	);
+	const [exitCode, stdout, stderr] = await Promise.all([
+		proc.exited,
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+	]);
+	return { exitCode, stderr, stdout };
+}
+
+async function runMainCli(args: string[]) {
+	const proc = Bun.spawn(["bun", "bin/autoresearch-mcp", ...args], {
+		cwd: repoRoot,
+		stderr: "pipe",
+		stdout: "pipe",
+	});
+	const [exitCode, stdout, stderr] = await Promise.all([
+		proc.exited,
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+	]);
+	return { exitCode, stderr, stdout };
+}
+
 afterAll(async () => {
 	await Promise.all(
 		tempDirs.map((dir) => rm(dir, { force: true, recursive: true })),
@@ -120,6 +155,17 @@ describe("published package bins", () => {
 		expect(stdout).not.toContain("Server running on Stdio transport");
 	});
 
+	it.each([["unknown-command"], ["--bogus"], ["-x"]])(
+		"main CLI rejects unknown top-level input %s with usage",
+		async (argument) => {
+			const result = await runMainCli([argument]);
+			expect(result.exitCode).not.toBe(0);
+			expect(result.stderr).toContain(`Unknown command or option: ${argument}`);
+			expect(result.stderr).toContain("Usage:");
+			expect(result.stdout).not.toContain("Server running on Stdio transport");
+		},
+	);
+
 	it("standalone install-skill bin supports dry-run", async () => {
 		const proc = Bun.spawn(
 			[
@@ -179,6 +225,33 @@ describe("published package bins", () => {
 
 		expect(exitCode).toBe(0);
 		expect(stdout).toContain("Usage");
+	});
+
+	it.each([
+		["unknown flag", ["--dryrun"]],
+		["invalid target", ["--target", "bogus"]],
+	])(
+		"main CLI propagates install-skill %s failure status",
+		async (_case, args) => {
+			const result = await runMainInstallSkill(args);
+			expect(result.exitCode).not.toBe(0);
+		},
+	);
+
+	it("main CLI propagates a forced installer filesystem failure", async () => {
+		const tempRoot = await mkdtemp(
+			join(tmpdir(), "autoresearch-main-fs-failure-"),
+		);
+		tempDirs.push(tempRoot);
+		const homeFile = join(tempRoot, "home-is-a-file");
+		await Bun.write(homeFile, "not a directory");
+
+		const result = await runMainInstallSkill(
+			["--target", "opencode"],
+			homeFile,
+		);
+		expect(result.exitCode).not.toBe(0);
+		expect(result.stdout).toContain("[warn]");
 	});
 });
 

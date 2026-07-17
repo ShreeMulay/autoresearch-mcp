@@ -1,16 +1,15 @@
 # Autoresearch-MCP Project State
 
-## Current State (v0.1.0)
+## Current State (v0.4.0, Unreleased)
 
-MCP server implementing Karpathy's autoresearch pattern as a composable technique catalog with experiment tracking.
+MCP server implementing Karpathy's autoresearch pattern as a composable technique catalog with experiment tracking. Version 0.4.0 is the planned first npm release, but it remains unpublished and untagged pending integrity remediation and npm authentication.
 
 ### What's Working
 - **Catalog**: 30 YAML techniques across 4 layers (8 strategies, 8 evaluators, 6 patterns, 8 recipes)
 - **SQLite + FTS5**: Full-text search, catalog CRUD
-- **11 MCP Tools**: search, get, suggest, register, update, log, get/list experiments, scaffold, log outcome
-- **33 Resources**: Technique details served as MCP resources
+- **12 MCP Tools**: catalog discovery, experiment tracking, scaffolding, diagnostics, and outcome logging
+- **4 Resources**: Catalog, experiment schema, technique schema, and workflow guide
 - **3 Prompts**: Discovery, experiment, meta-learning
-- **Example**: python-prompt-optimizer (66→96 in 2 iterations)
 - **Self-optimization**: Tool descriptions, suggest_technique quality evaluated
 - **License**: Apache-2.0
 - **Repo**: https://github.com/ShreeMulay/autoresearch-mcp
@@ -32,7 +31,10 @@ MCP server implementing Karpathy's autoresearch pattern as a composable techniqu
 - `autoresearch/self-optimize/`: Self-optimization evaluators
 
 ### In Progress
-- Phase 2: Skill + tests + public release v0.2.0
+- v0.4.0 integrity remediation, packed-content safety audit, and release-document reconciliation
+- First public npm publication after all integrity gates pass
 
 ### Blocked
-- None
+- Publication is blocked until integrity remediation and protected package/CI gates pass.
+- npm publication requires operator authentication.
+- No `v0.4.0` tag may be created before the tested package is published and registry smoke succeeds.

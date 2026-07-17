@@ -7,6 +7,7 @@ import {
 	type ExperimentResult,
 	type ExperimentSpec,
 	ExperimentSpecSchema,
+	type ExperimentStatus,
 } from "../types.js";
 import { getDb } from "./schema.js";
 
@@ -90,66 +91,48 @@ export function listExperiments(filters?: {
 export function updateExperiment(
 	id: string,
 	updates: {
-		status?: string;
-		best_score?: number;
-		total_iterations?: number;
-		successful_iterations?: number;
-		cost_tokens?: number;
-		cost_dollars?: number;
-		cost_wall_seconds?: number;
-		started_at?: string;
-		completed_at?: string;
+		status?: ExperimentStatus;
 		notes?: string;
 	},
 ): boolean {
 	const db = getDb();
-	const setClauses: string[] = ["updated_at = datetime('now')"];
-	const params: Params = { $id: id };
+	db.exec("BEGIN IMMEDIATE");
+	try {
+		const existing = getExperiment(id);
+		if (!existing) {
+			db.exec("COMMIT");
+			return false;
+		}
+		const setClauses: string[] = ["updated_at = datetime('now')"];
+		const params: Params = { $id: id };
 
-	if (updates.status !== undefined) {
-		setClauses.push("status = $status");
-		params.$status = updates.status;
-	}
-	if (updates.best_score !== undefined) {
-		setClauses.push("best_score = $best_score");
-		params.$best_score = updates.best_score;
-	}
-	if (updates.total_iterations !== undefined) {
-		setClauses.push("total_iterations = $total_iterations");
-		params.$total_iterations = updates.total_iterations;
-	}
-	if (updates.successful_iterations !== undefined) {
-		setClauses.push("successful_iterations = $successful_iterations");
-		params.$successful_iterations = updates.successful_iterations;
-	}
-	if (updates.cost_tokens !== undefined) {
-		setClauses.push("cost_tokens = $cost_tokens");
-		params.$cost_tokens = updates.cost_tokens;
-	}
-	if (updates.cost_dollars !== undefined) {
-		setClauses.push("cost_dollars = $cost_dollars");
-		params.$cost_dollars = updates.cost_dollars;
-	}
-	if (updates.cost_wall_seconds !== undefined) {
-		setClauses.push("cost_wall_seconds = $cost_wall_seconds");
-		params.$cost_wall_seconds = updates.cost_wall_seconds;
-	}
-	if (updates.started_at !== undefined) {
-		setClauses.push("started_at = $started_at");
-		params.$started_at = updates.started_at;
-	}
-	if (updates.completed_at !== undefined) {
-		setClauses.push("completed_at = $completed_at");
-		params.$completed_at = updates.completed_at;
-	}
-	if (updates.notes !== undefined) {
-		setClauses.push("notes = $notes");
-		params.$notes = updates.notes;
-	}
+		if (updates.status !== undefined) {
+			assertStatusTransition(existing.status, updates.status);
+			setClauses.push("status = $status");
+			params.$status = updates.status;
+			if (updates.status === "running" && existing.started_at === undefined) {
+				setClauses.push("started_at = datetime('now')");
+			}
+			if (
+				(updates.status === "completed" || updates.status === "failed") &&
+				existing.completed_at === undefined
+			) {
+				setClauses.push("completed_at = datetime('now')");
+			}
+		}
+		if (updates.notes !== undefined) {
+			setClauses.push("notes = $notes");
+			params.$notes = updates.notes;
+		}
 
-	const sql = `UPDATE experiments SET ${setClauses.join(", ")} WHERE id = $id`;
-	const result = db.prepare(sql).run(params);
-	return result.changes > 0;
+		const sql = `UPDATE experiments SET ${setClauses.join(", ")} WHERE id = $id`;
+		const changed = db.prepare(sql).run(params).changes > 0;
+		db.exec("COMMIT");
+		return changed;
+	} catch (error) {
+		db.exec("ROLLBACK");
+		throw error;
+	}
 }
 
 // ============================================================
@@ -160,21 +143,38 @@ export function logExperimentResult(result: {
 	experiment_id: string;
 	iteration: number;
 	score: number;
-	improved: boolean;
+	improved?: boolean;
 	is_baseline?: boolean;
 	change_description: string;
 	duration_seconds?: number;
 	cost_tokens?: number;
 	cost_dollars?: number;
 	metadata?: Record<string, unknown>;
-}): number {
+}): ExperimentResult {
 	const db = getDb();
-	assertNonnegative("duration_seconds", result.duration_seconds);
-	assertNonnegative("cost_tokens", result.cost_tokens);
-	assertNonnegative("cost_dollars", result.cost_dollars);
+	assertFiniteNonnegative("duration_seconds", result.duration_seconds);
+	assertFiniteNonnegative("cost_tokens", result.cost_tokens);
+	assertFiniteNonnegative("cost_dollars", result.cost_dollars);
+	if (!Number.isInteger(result.iteration) || result.iteration < 0) {
+		throw new Error("iteration must be a nonnegative integer");
+	}
+	if (!Number.isFinite(result.score)) {
+		throw new Error("score must be finite");
+	}
+	assertFiniteMetadata(result.metadata);
 
 	db.exec("BEGIN IMMEDIATE");
 	try {
+		const experiment = getExperiment(result.experiment_id);
+		if (!experiment) {
+			throw new Error(`Experiment not found: ${result.experiment_id}`);
+		}
+		if (experiment.spec.acceptance_rule !== "strict-improvement") {
+			throw new Error(
+				`Unsupported acceptance rule: ${experiment.spec.acceptance_rule}`,
+			);
+		}
+
 		db.prepare(
 			`INSERT INTO experiment_results (experiment_id, iteration, score, improved, is_baseline, change_description, duration_seconds, cost_tokens, cost_dollars, metadata, created_at)
        VALUES ($experiment_id, $iteration, $score, $improved, $is_baseline, $change_description, $duration_seconds, $cost_tokens, $cost_dollars, $metadata, datetime('now'))
@@ -191,7 +191,7 @@ export function logExperimentResult(result: {
 			$experiment_id: result.experiment_id,
 			$iteration: result.iteration,
 			$score: result.score,
-			$improved: result.improved ? 1 : 0,
+			$improved: 0,
 			$is_baseline: result.is_baseline ? 1 : 0,
 			$change_description: result.change_description,
 			$duration_seconds: result.duration_seconds ?? null,
@@ -200,19 +200,68 @@ export function logExperimentResult(result: {
 			$metadata: result.metadata ? JSON.stringify(result.metadata) : null,
 		} as Params);
 
-		refreshExperimentAggregates(result.experiment_id);
+		const ordered = getAllExperimentResults(result.experiment_id);
+		const baselineResults = ordered.filter((entry) => entry.is_baseline);
+		if (baselineResults.length !== 1) {
+			throw new Error("Experiment results require exactly one baseline");
+		}
+		const baseline = baselineResults[0];
+		if (
+			ordered.some(
+				(entry) => !entry.is_baseline && entry.iteration <= baseline.iteration,
+			)
+		) {
+			throw new Error(
+				"The baseline must be earlier than every candidate result",
+			);
+		}
+
+		let champion = baseline.score;
+		let assertedImprovement: boolean | undefined;
+		const updateImprovement = db.prepare(
+			"UPDATE experiment_results SET improved = $improved WHERE id = $id",
+		);
+		for (const entry of ordered) {
+			let improved = false;
+			if (!entry.is_baseline) {
+				assertWithinMetricBounds(experiment.spec, entry.score);
+				improved = isBetter(
+					entry.score,
+					champion,
+					experiment.spec.metric_direction,
+				);
+				if (improved) champion = entry.score;
+			}
+			updateImprovement.run({
+				$id: entry.id ?? null,
+				$improved: improved ? 1 : 0,
+			} as Params);
+			if (entry.iteration === result.iteration) assertedImprovement = improved;
+		}
+
+		if (
+			result.improved !== undefined &&
+			result.improved !== assertedImprovement
+		) {
+			throw new Error(
+				`Improved assertion ${result.improved} does not match server-derived value ${assertedImprovement}`,
+			);
+		}
+
+		refreshExperimentAggregates(result.experiment_id, champion);
 
 		const row = db
 			.prepare(
-				"SELECT id FROM experiment_results WHERE experiment_id = $experiment_id AND iteration = $iteration",
+				"SELECT * FROM experiment_results WHERE experiment_id = $experiment_id AND iteration = $iteration",
 			)
 			.get({
 				$experiment_id: result.experiment_id,
 				$iteration: result.iteration,
-			} as Params) as { id: number };
+			} as Params) as Record<string, unknown>;
+		const logged = rowToExperimentResult(row);
 
 		db.exec("COMMIT");
-		return row.id;
+		return logged;
 	} catch (error) {
 		db.exec("ROLLBACK");
 		throw error;
@@ -252,9 +301,24 @@ export function getExperimentResults(
 	}));
 }
 
-function assertNonnegative(field: string, value: number | undefined): void {
-	if (value !== undefined && value < 0) {
-		throw new Error(`${field} must be nonnegative`);
+function assertFiniteNonnegative(
+	field: string,
+	value: number | undefined,
+): void {
+	if (value !== undefined && (!Number.isFinite(value) || value < 0)) {
+		throw new Error(`${field} must be nonnegative and finite`);
+	}
+}
+
+function assertFiniteMetadata(value: unknown, seen = new Set<object>()): void {
+	if (typeof value === "number" && !Number.isFinite(value)) {
+		throw new Error("metadata numbers must be finite");
+	}
+	if (typeof value !== "object" || value === null) return;
+	if (seen.has(value)) return;
+	seen.add(value);
+	for (const entry of Array.isArray(value) ? value : Object.values(value)) {
+		assertFiniteMetadata(entry, seen);
 	}
 }
 
@@ -313,7 +377,10 @@ function parseExperimentSpec(spec: string | ExperimentSpec): ExperimentSpec {
 	return parsed.data;
 }
 
-function refreshExperimentAggregates(experimentId: string): void {
+function refreshExperimentAggregates(
+	experimentId: string,
+	championScore?: number,
+): void {
 	const db = getDb();
 	const totals = db
 		.prepare(
@@ -334,31 +401,6 @@ function refreshExperimentAggregates(experimentId: string): void {
 		total_iterations: number;
 	};
 
-	const bestImproved = db
-		.prepare(
-			`SELECT score
-       FROM experiment_results
-       WHERE experiment_id = $experiment_id AND improved = 1
-       ORDER BY iteration DESC, id DESC
-       LIMIT 1`,
-		)
-		.get({ $experiment_id: experimentId } as Params) as {
-		score: number;
-	} | null;
-	const bestBaseline = bestImproved
-		? null
-		: (db
-				.prepare(
-					`SELECT score
-       FROM experiment_results
-       WHERE experiment_id = $experiment_id AND is_baseline = 1
-       ORDER BY iteration DESC, id DESC
-       LIMIT 1`,
-				)
-				.get({ $experiment_id: experimentId } as Params) as {
-				score: number;
-			} | null);
-
 	db.prepare(
 		`UPDATE experiments SET
       best_score = $best_score,
@@ -370,7 +412,7 @@ function refreshExperimentAggregates(experimentId: string): void {
       updated_at = datetime('now')
      WHERE id = $experiment_id`,
 	).run({
-		$best_score: bestImproved?.score ?? bestBaseline?.score ?? null,
+		$best_score: championScore ?? null,
 		$cost_dollars: totals.cost_dollars,
 		$cost_tokens: totals.cost_tokens,
 		$cost_wall_seconds: totals.cost_wall_seconds,
@@ -378,6 +420,70 @@ function refreshExperimentAggregates(experimentId: string): void {
 		$successful_iterations: totals.successful_iterations,
 		$total_iterations: totals.total_iterations,
 	} as Params);
+}
+
+function getAllExperimentResults(experimentId: string): ExperimentResult[] {
+	const rows = getDb()
+		.prepare(
+			"SELECT * FROM experiment_results WHERE experiment_id = $experiment_id ORDER BY iteration ASC, id ASC",
+		)
+		.all({ $experiment_id: experimentId } as Params) as Record<
+		string,
+		unknown
+	>[];
+	return rows.map(rowToExperimentResult);
+}
+
+function rowToExperimentResult(row: Record<string, unknown>): ExperimentResult {
+	return {
+		id: row.id as number,
+		experiment_id: row.experiment_id as string,
+		iteration: row.iteration as number,
+		score: row.score as number,
+		improved: Boolean(row.improved),
+		is_baseline: Boolean(row.is_baseline),
+		change_description: row.change_description as string,
+		duration_seconds: (row.duration_seconds as number) ?? undefined,
+		cost_tokens: (row.cost_tokens as number) ?? undefined,
+		cost_dollars: (row.cost_dollars as number) ?? undefined,
+		metadata: row.metadata ? JSON.parse(row.metadata as string) : undefined,
+		created_at: (row.created_at as string) ?? undefined,
+	};
+}
+
+function isBetter(
+	score: number,
+	champion: number,
+	direction: ExperimentSpec["metric_direction"],
+): boolean {
+	return direction === "maximize" ? score > champion : score < champion;
+}
+
+function assertWithinMetricBounds(spec: ExperimentSpec, score: number): void {
+	const floor = spec.constraints.metric_floors[spec.metric_name];
+	const ceiling = spec.constraints.metric_ceilings[spec.metric_name];
+	if (floor !== undefined && score < floor) {
+		throw new Error(`Score ${score} is below metric floor ${floor}`);
+	}
+	if (ceiling !== undefined && score > ceiling) {
+		throw new Error(`Score ${score} exceeds metric ceiling ${ceiling}`);
+	}
+}
+
+function assertStatusTransition(current: string, next: string): void {
+	if (current === next) return;
+	const transitions: Record<string, readonly string[]> = {
+		scaffolded: ["running", "failed"],
+		running: ["paused", "completed", "failed"],
+		paused: ["running", "completed", "failed"],
+		completed: [],
+		failed: [],
+	};
+	if (!transitions[current]?.includes(next)) {
+		throw new Error(
+			`Invalid experiment status transition: ${current} -> ${next}`,
+		);
+	}
 }
 
 function rowToExperiment(row: Record<string, unknown>): Experiment {

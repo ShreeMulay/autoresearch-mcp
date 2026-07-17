@@ -97,7 +97,7 @@ describe("updateExperiment", () => {
 		expect(exp?.status).toBe("running");
 	});
 
-	it("updates scores and cost", () => {
+	it("does not allow public updates to overwrite derived aggregates", () => {
 		createExperiment({
 			id: "exp-004",
 			spec: validSpec(),
@@ -111,15 +111,15 @@ describe("updateExperiment", () => {
 			cost_tokens: 1000,
 			cost_dollars: 0.05,
 			cost_wall_seconds: 120,
-		});
+		} as Parameters<typeof updateExperiment>[1]);
 
 		const exp = getExperiment("exp-004");
-		expect(exp?.best_score).toBe(95.5);
-		expect(exp?.total_iterations).toBe(5);
-		expect(exp?.successful_iterations).toBe(3);
-		expect(exp?.cost_tokens).toBe(1000);
-		expect(exp?.cost_dollars).toBe(0.05);
-		expect(exp?.cost_wall_seconds).toBe(120);
+		expect(exp?.best_score).toBeUndefined();
+		expect(exp?.total_iterations).toBe(0);
+		expect(exp?.successful_iterations).toBe(0);
+		expect(exp?.cost_tokens).toBe(0);
+		expect(exp?.cost_dollars).toBe(0);
+		expect(exp?.cost_wall_seconds).toBe(0);
 	});
 
 	it("returns false for missing experiment", () => {
@@ -151,9 +151,10 @@ describe("logExperimentResult", () => {
 
 		logExperimentResult({
 			experiment_id: "exp-006",
-			iteration: 1,
+			iteration: 0,
 			score: 75,
-			improved: true,
+			improved: false,
+			is_baseline: true,
 			change_description: "Baseline",
 			duration_seconds: 10,
 			cost_tokens: 500,
@@ -162,7 +163,7 @@ describe("logExperimentResult", () => {
 
 		const exp = getExperiment("exp-006");
 		expect(exp?.total_iterations).toBe(1);
-		expect(exp?.successful_iterations).toBe(1);
+		expect(exp?.successful_iterations).toBe(0);
 		expect(exp?.best_score).toBe(75);
 		expect(exp?.cost_tokens).toBe(500);
 		expect(exp?.cost_dollars).toBe(0.02);
@@ -176,12 +177,13 @@ describe("logExperimentResult", () => {
 			project_path: "/test",
 		});
 
-		// Iteration 1: baseline, improved (no prior best)
+		// Iteration 1: baseline (not counted as an improvement)
 		logExperimentResult({
 			experiment_id: "exp-007",
 			iteration: 1,
 			score: 80,
-			improved: true,
+			improved: false,
+			is_baseline: true,
 			change_description: "Baseline",
 		});
 
@@ -206,7 +208,7 @@ describe("logExperimentResult", () => {
 		const exp = getExperiment("exp-007");
 		expect(exp?.best_score).toBe(90);
 		expect(exp?.total_iterations).toBe(3);
-		expect(exp?.successful_iterations).toBe(2);
+		expect(exp?.successful_iterations).toBe(1);
 	});
 
 	it("accumulates cost across iterations", () => {
@@ -220,7 +222,8 @@ describe("logExperimentResult", () => {
 			experiment_id: "exp-008",
 			iteration: 1,
 			score: 50,
-			improved: true,
+			improved: false,
+			is_baseline: true,
 			change_description: "A",
 			cost_tokens: 100,
 			cost_dollars: 0.01,
@@ -255,7 +258,8 @@ describe("logExperimentResult", () => {
 			experiment_id: "exp-009",
 			iteration: 1,
 			score: 60,
-			improved: true,
+			improved: false,
+			is_baseline: true,
 			change_description: "First",
 		});
 

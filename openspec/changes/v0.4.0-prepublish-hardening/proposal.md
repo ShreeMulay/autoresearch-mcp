@@ -1,6 +1,6 @@
 # Change: v0.4.0 Pre-Publish Hardening
 
-## Status: IMPLEMENTED - npm publish pending interactive registry auth
+## Status: IMPLEMENTED LEGACY SCOPE - RELEASE BLOCKED BY INTEGRITY REMEDIATION AND NPM AUTH
 
 ## Why
 
@@ -13,6 +13,7 @@ A full post-merge codebase review (oracle, 2026-06-12) found one security blocke
 - First npm release will be `0.4.0` (0.3.0 was never published).
 - Follow-up backlog bead `autoresearch-mcp-46d` has been completed: budget/risk/constraints exposure, real zod-to-json-schema conversion, missing recipe templates, artifact inference reuse, tag normalization, E2E readiness polling, and Biome configuration are landed.
 - Final release hygiene before npm publish MUST remove all fake-score evaluator fallbacks, verify the package contents from a packed tarball, and archive completed OpenSpec changes.
+- A later comprehensive release review overturned the release-ready conclusion. Version 0.4.0 remains unpublished and untagged until the integrity-remediation change is complete and npm authentication is available.
 
 ## What Changes
 
@@ -46,7 +47,8 @@ A full post-merge codebase review (oracle, 2026-06-12) found one security blocke
 - [x] Forgejo repo `thekidneyexperts/autoresearch-mcp` created (public), `main` pushed at `a971c0a`, branch protection restored (no direct push, 1 approval, woodpecker context), GitHub configured as push mirror with sync_on_commit.
 - [x] Woodpecker CI activated on Forgejo and `.woodpecker.yml` landed. Required status context corrected to `ci/woodpecker/pr/woodpecker`; Forgejo Actions disabled for this repo.
 - [x] Deferred review backlog landed via Forgejo PR #3 (`be1247d`): missing recipe templates, real zod-to-json-schema, budget/risk/constraints exposure, shared artifact inference, tag normalization, E2E readiness polling, and Biome config.
-- [ ] Final release hygiene PR: remove/fail-close the remaining fake-score `get_template` fallback, add regression coverage, update CHANGELOG for PR #3/final fix, resolve AGENTS.md observability guidance, archive completed v0.3.0 OpenSpec, and run quality/package gates.
+- [x] Final release hygiene PR: remove/fail-close the remaining fake-score `get_template` fallback, add regression coverage, update CHANGELOG for PR #3/final fix, resolve AGENTS.md observability guidance, archive completed v0.3.0 OpenSpec, and run quality/package gates.
+- [ ] Complete the superseding v0.4.0 integrity remediation and obtain protected package/CI evidence before publication.
 
 ## Close Criteria
 

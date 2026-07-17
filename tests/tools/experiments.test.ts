@@ -1,13 +1,80 @@
 /**
  * Tests for tool helper functions (src/tools/experiments.ts)
  *
- * These are pure functions extracted from the tool handlers for unit testing.
- * The MCP tool registration itself is not tested (SDK responsibility).
+ * Covers pure helpers and focused tool-handler response behavior.
  */
 
-import { describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+	createExperiment,
+	getExperiment,
+	getExperimentResults,
+	logExperimentResult,
+} from "../../src/db/experiments.js";
+import { resetDb } from "../../src/db/schema.js";
 import { inferArtifactType } from "../../src/tools/artifacts.js";
-import { buildExperimentSpec } from "../../src/tools/experiments.js";
+import {
+	buildExperimentSpec,
+	registerExperimentTools,
+} from "../../src/tools/experiments.js";
+import type { ExperimentSpec } from "../../src/types.js";
+
+interface ToolResult {
+	content: Array<{ type: "text"; text: string }>;
+	isError?: boolean;
+}
+
+type LogResultHandler = (args: {
+	experiment_id: string;
+	iteration: number;
+	score: number;
+	improved?: boolean;
+	change_description: string;
+	duration_seconds?: number;
+	cost_tokens?: number;
+	cost_dollars?: number;
+	is_baseline?: boolean;
+}) => Promise<ToolResult>;
+
+function logResultHandler(): LogResultHandler {
+	const handlers = new Map<string, LogResultHandler>();
+	const mcp = {
+		tool: (...args: unknown[]) => {
+			const [name, , , handler] = args;
+			handlers.set(name as string, handler as LogResultHandler);
+		},
+	} as McpServer;
+
+	registerExperimentTools(mcp);
+	const handler = handlers.get("log_result");
+	if (!handler) throw new Error("log_result handler was not registered");
+	return handler;
+}
+
+function validSpec(): ExperimentSpec {
+	return {
+		target_artifact: "target.md",
+		artifact_type: "content",
+		mutation_strategy: "LLM edit",
+		evaluator_command: "bash eval.sh",
+		metric_name: "score",
+		metric_direction: "maximize",
+		acceptance_rule: "strict-improvement",
+		budget: {},
+		environment: {},
+		stopping_conditions: ["budget-exhaustion"],
+		risk_policy: {
+			network_denied: true,
+			requires_approval: false,
+			sandbox_only: false,
+			secrets_denied: true,
+		},
+		constraints: { metric_ceilings: {}, metric_floors: {} },
+	};
+}
+
+beforeEach(() => resetDb(":memory:"));
 
 describe("ExperimentSpec inference logic", () => {
 	it("detects prompt artifacts from path/content", () => {
@@ -32,6 +99,42 @@ describe("ExperimentSpec inference logic", () => {
 });
 
 describe("Experiment response formatting", () => {
+	it("reports the exact late champion after more than 200 persisted results", async () => {
+		const experimentId = "late-champion";
+		createExperiment({
+			id: experimentId,
+			project_path: "/fixture",
+			spec: validSpec(),
+		});
+		for (let iteration = 0; iteration <= 200; iteration++) {
+			logExperimentResult({
+				experiment_id: experimentId,
+				iteration,
+				score: iteration,
+				change_description: `iteration ${iteration}`,
+				...(iteration === 0 ? { is_baseline: true } : {}),
+			});
+		}
+
+		const response = await logResultHandler()({
+			experiment_id: experimentId,
+			iteration: 201,
+			score: 201,
+			change_description: "late champion",
+		});
+		const persisted = getExperimentResults(experimentId, 202)[201];
+
+		expect(response.isError).toBeUndefined();
+		expect(response.content[0].text).toContain("Iteration: 201");
+		expect(response.content[0].text).toContain("Improved: yes");
+		expect(persisted).toMatchObject({
+			iteration: 201,
+			score: 201,
+			improved: true,
+		});
+		expect(getExperiment(experimentId)?.best_score).toBe(persisted.score);
+	});
+
 	it("formats currency values correctly", () => {
 		const formatCurrency = (value: number | undefined): string => {
 			if (value === undefined) return "-";

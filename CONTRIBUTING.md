@@ -2,6 +2,10 @@
 
 Thanks for your interest in improving autoresearch-mcp. The easiest contributions are catalog entries and recipe templates, but code improvements and issue reports are also welcome.
 
+## Data safety for contributions
+
+Use synthetic, non-sensitive data in examples and tests. Do not provide PHI, patient identifiers, PHI-bearing prompts or model responses, clinical records, secrets, or production datasets to the MCP server, evaluators, review tooling, logs, fixtures, or CI. Do not submit real sensitive data in issues or pull requests.
+
 ## Adding a new technique
 
 The fastest way to contribute is to add one YAML file to the catalog.

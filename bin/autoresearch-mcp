@@ -2,22 +2,29 @@
 
 const [, , command, ...args] = process.argv;
 
-if (command === "install-skill") {
-	const { installSkill } = await import("../scripts/install-skill.js");
-	await installSkill(args);
-	process.exit(0);
-}
-
-if (command === "--help" || command === "-h") {
-	console.log(`autoresearch-mcp
+const usage = `autoresearch-mcp
 
 Usage:
   autoresearch-mcp                  Start the MCP server over stdio
   autoresearch-mcp install-skill    Install the bundled autoresearch skill
 
 Options:
-  -h, --help                        Show this help text`);
+  -h, --help                        Show this help text`;
+
+if (command === "install-skill") {
+	const { installSkill } = await import("../scripts/install-skill.js");
+	await installSkill(args);
+	process.exit(process.exitCode ?? 0);
+}
+
+if (command === "--help" || command === "-h") {
+	console.log(usage);
 	process.exit(0);
+}
+
+if (command !== undefined) {
+	console.error(`Unknown command or option: ${command}\n\n${usage}`);
+	process.exit(1);
 }
 
 const { main } = await import("../src/index.ts");

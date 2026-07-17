@@ -3,17 +3,31 @@
  */
 
 import { beforeEach, describe, expect, it } from "bun:test";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import {
+	access,
+	chmod,
+	mkdir,
+	mkdtemp,
+	readFile,
+	readdir,
+	rename,
+	rm,
+	stat,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getExperiment } from "../../src/db/experiments.js";
+import { getExperiment, listExperiments } from "../../src/db/experiments.js";
 import { loadCatalog } from "../../src/db/load-catalog.js";
 import { resetDb } from "../../src/db/schema.js";
 import { upsertCatalogItem } from "../../src/db/techniques.js";
 import {
+	type ScaffoldFaultPoint,
 	registerScaffoldingTools,
 	resolveTemplatePath,
+	setScaffoldFaultInjectorForTests,
 } from "../../src/tools/scaffolding.js";
 import type { CatalogItem } from "../../src/types.js";
 
@@ -21,6 +35,7 @@ interface ScaffoldArgs {
 	recipe_id: string;
 	project_path: string;
 	metric_name: string;
+	metric_direction?: "minimize" | "maximize";
 	target_file?: string;
 	custom_instructions?: string;
 	overwrite: boolean;
@@ -56,6 +71,7 @@ type GetTemplateHandler = (args: {
 const tempDirs: string[] = [];
 
 beforeEach(async () => {
+	setScaffoldFaultInjectorForTests();
 	await Promise.all(
 		tempDirs.map((dir) => rm(dir, { force: true, recursive: true })),
 	);
@@ -64,6 +80,14 @@ beforeEach(async () => {
 	const loadResult = await loadCatalog();
 	expect(loadResult.errors).toEqual([]);
 });
+
+async function scaffoldResidue(projectDir: string): Promise<string[]> {
+	return (await readdir(projectDir)).filter(
+		(name) =>
+			name === ".autoresearch-scaffold.lock" ||
+			name.startsWith(".autoresearch-scaffold-"),
+	);
+}
 
 async function tempProjectDir(): Promise<string> {
 	const dir = await mkdtemp(join(tmpdir(), "autoresearch-scaffold-tool-"));
@@ -181,6 +205,29 @@ describe("scaffold_experiment hardening", () => {
 			"target_file must resolve inside project_path",
 		);
 		expect(await pathExists(join(projectDir, "autoresearch"))).toBe(false);
+	});
+
+	it("rejects target files whose existing symlink resolves outside project", async () => {
+		const projectDir = await tempProjectDir();
+		const outsideDir = await tempProjectDir();
+		const outsideFile = join(outsideDir, "secret.md");
+		await writeFile(outsideFile, "outside");
+		await symlink(outsideFile, join(projectDir, "target.md"));
+
+		const result = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "score",
+			target_file: "target.md",
+			overwrite: false,
+		});
+
+		expect(result.isError).toBe(true);
+		expect(result.content[0]?.text).toContain(
+			"target_file must resolve inside project_path",
+		);
+		expect(await scaffoldResidue(projectDir)).toEqual([]);
+		expect(listExperiments()).toEqual([]);
 	});
 });
 
@@ -315,5 +362,542 @@ describe("scaffold_experiment templates", () => {
 			0.75,
 		);
 		expect(experiment?.spec.constraints.metric_ceilings).toEqual({});
+	});
+
+	it("persists and generates an explicit minimize metric direction", async () => {
+		const projectDir = await tempProjectDir();
+		const result = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "loss",
+			metric_direction: "minimize",
+			target_file: "target-prompt.md",
+			overwrite: false,
+		});
+
+		expect(result.isError).not.toBe(true);
+		expect(
+			getExperiment(experimentIdFromResult(result))?.spec.metric_direction,
+		).toBe("minimize");
+		const program = await readFile(
+			join(projectDir, "autoresearch", "program.md"),
+			"utf8",
+		);
+		expect(program).toContain("- Metric Direction: minimize");
+	});
+
+	it("defaults omitted metric direction to maximize in persistence and output", async () => {
+		const projectDir = await tempProjectDir();
+		const result = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "accuracy",
+			target_file: "target-prompt.md",
+			overwrite: false,
+		});
+
+		expect(result.isError).not.toBe(true);
+		expect(
+			getExperiment(experimentIdFromResult(result))?.spec.metric_direction,
+		).toBe("maximize");
+		const program = await readFile(
+			join(projectDir, "autoresearch", "program.md"),
+			"utf8",
+		);
+		expect(program).toContain("- Metric Direction: maximize");
+	});
+
+	it("renders exactly one normalized Run Controls section in curated output", async () => {
+		const projectDir = await tempProjectDir();
+		const result = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "accuracy",
+			target_file: "target-prompt.md",
+			custom_instructions: "Use the fixed synthetic fixture only.",
+			overwrite: false,
+			budget: {
+				max_iterations: 4,
+				max_time_seconds: 120,
+				max_tokens: 5000,
+				max_dollars: 1.25,
+			},
+			risk_policy: {
+				sandbox_only: true,
+				requires_approval: true,
+				network_denied: true,
+				secrets_denied: true,
+			},
+			constraints: {
+				metric_floors: { accuracy: 0.8 },
+				metric_ceilings: { accuracy: 1 },
+			},
+		});
+		expect(result.isError).not.toBe(true);
+
+		const program = await readFile(
+			join(projectDir, "autoresearch", "program.md"),
+			"utf8",
+		);
+		expect((program.match(/^## Run Controls$/gm) ?? []).length).toBe(1);
+		expect(program).toContain("Use the fixed synthetic fixture only.");
+		expect(program).toMatch(/max_iterations[^\n]*4/);
+		expect(program).toMatch(/max_time_seconds[^\n]*120/);
+		expect(program).toMatch(/max_tokens[^\n]*5000/);
+		expect(program).toMatch(/max_dollars[^\n]*1\.25/);
+		expect(program).toMatch(/sandbox_only[^\n]*true/);
+		expect(program).toMatch(/requires_approval[^\n]*true/);
+		expect(program).toMatch(/network_denied[^\n]*true/);
+		expect(program).toMatch(/secrets_denied[^\n]*true/);
+		expect(program).toMatch(/metric_floors[^\n]*accuracy[^\n]*0\.8/);
+		expect(program).toMatch(/metric_ceilings[^\n]*accuracy[^\n]*1/);
+		expect(program).toMatch(/Stopping Conditions[^\n]*budget-exhaustion/i);
+		expect(program).toMatch(/Metric Direction[^\n]*maximize/i);
+		expect(program).toMatch(
+			/Evaluator Command[^\n]*\.\/autoresearch\/eval\.sh/i,
+		);
+	});
+
+	it("restores exact overwrite contents and modes after a filesystem-shaped failure", async () => {
+		const projectDir = await tempProjectDir();
+		const scaffoldDir = join(projectDir, "autoresearch");
+		await mkdir(scaffoldDir);
+		const programPath = join(scaffoldDir, "program.md");
+		const evalPath = join(scaffoldDir, "eval.sh");
+		const resultsPath = join(scaffoldDir, "results.tsv");
+		await writeFile(programPath, "original program\n");
+		await writeFile(evalPath, "original evaluator\n");
+		await chmod(programPath, 0o640);
+		await chmod(evalPath, 0o700);
+		await mkdir(resultsPath);
+
+		const result = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "accuracy",
+			overwrite: true,
+		});
+
+		expect(result.isError).toBe(true);
+		expect(await readFile(programPath, "utf8")).toBe("original program\n");
+		expect(await readFile(evalPath, "utf8")).toBe("original evaluator\n");
+		expect((await stat(programPath)).mode & 0o777).toBe(0o640);
+		expect((await stat(evalPath)).mode & 0o777).toBe(0o700);
+		expect((await stat(resultsPath)).isDirectory()).toBe(true);
+		expect(listExperiments()).toEqual([]);
+	});
+
+	it("canonicalizes a symlinked project root before writing and registration", async () => {
+		const realProject = await tempProjectDir();
+		const parent = await tempProjectDir();
+		const linkedProject = join(parent, "project-link");
+		await symlink(realProject, linkedProject, "dir");
+
+		const result = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: linkedProject,
+			metric_name: "accuracy",
+			overwrite: false,
+		});
+
+		expect(result.isError).not.toBe(true);
+		expect(result.content[0].text).toContain(
+			`Project Path: \`${realProject}\``,
+		);
+		expect(getExperiment(experimentIdFromResult(result))?.project_path).toBe(
+			realProject,
+		);
+	});
+
+	it.each([
+		"stage-mkdir",
+		"backup-mkdir",
+		"stage-write",
+		"stage-chmod",
+		"backup-rename",
+		"install-rename",
+		"db-register",
+	] satisfies ScaffoldFaultPoint[])(
+		"rolls back exact prior files and leaves no residue after %s failure",
+		async (faultPoint) => {
+			const projectDir = await tempProjectDir();
+			const scaffoldDir = join(projectDir, "autoresearch");
+			await mkdir(scaffoldDir);
+			const files = ["program.md", "eval.sh", "results.tsv"];
+			const modes = [0o640, 0o710, 0o600];
+			for (let index = 0; index < files.length; index++) {
+				const path = join(scaffoldDir, files[index] as string);
+				await writeFile(path, `original-${files[index]}\n`);
+				await chmod(path, modes[index] as number);
+			}
+			let injected = false;
+			setScaffoldFaultInjectorForTests((point) => {
+				if (!injected && point === faultPoint) {
+					injected = true;
+					throw new Error(`injected ${point}`);
+				}
+			});
+
+			const result = await scaffoldHandler()({
+				recipe_id: "prompt-optimization",
+				project_path: projectDir,
+				metric_name: "score",
+				overwrite: true,
+			});
+
+			expect(injected).toBe(true);
+			expect(result.isError).toBe(true);
+			for (let index = 0; index < files.length; index++) {
+				const path = join(scaffoldDir, files[index] as string);
+				expect(await readFile(path, "utf8")).toBe(`original-${files[index]}\n`);
+				expect((await stat(path)).mode & 0o777).toBe(modes[index]);
+			}
+			expect(listExperiments()).toEqual([]);
+			expect(await scaffoldResidue(projectDir)).toEqual([]);
+		},
+	);
+
+	it("recovers from lock creation failure without files, data, or stale exclusion", async () => {
+		const projectDir = await tempProjectDir();
+		let injected = false;
+		setScaffoldFaultInjectorForTests((point) => {
+			if (!injected && point === "lock-mkdir") {
+				injected = true;
+				throw new Error("injected lock-mkdir");
+			}
+		});
+
+		const failed = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "score",
+			overwrite: false,
+		});
+
+		expect(failed.isError).toBe(true);
+		expect(listExperiments()).toEqual([]);
+		expect(await pathExists(join(projectDir, "autoresearch"))).toBe(false);
+		expect(await scaffoldResidue(projectDir)).toEqual([]);
+
+		setScaffoldFaultInjectorForTests();
+		const recovered = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "score",
+			overwrite: false,
+		});
+		expect(recovered.isError).not.toBe(true);
+		expect(listExperiments()).toHaveLength(1);
+		expect(await scaffoldResidue(projectDir)).toEqual([]);
+	});
+
+	it("reports committed success and quarantines the lock after bounded removal failures", async () => {
+		const projectDir = await tempProjectDir();
+		let removalAttempts = 0;
+		setScaffoldFaultInjectorForTests((point) => {
+			if (point === "lock-remove") {
+				removalAttempts++;
+				throw new Error("injected lock-remove");
+			}
+		});
+
+		const committed = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "score",
+			overwrite: false,
+		});
+
+		expect(committed.isError).not.toBe(true);
+		expect(removalAttempts).toBe(3);
+		expect(listExperiments()).toHaveLength(1);
+		for (const file of ["program.md", "eval.sh", "results.tsv"]) {
+			expect(await pathExists(join(projectDir, "autoresearch", file))).toBe(
+				true,
+			);
+		}
+		const recoveryArtifacts = await scaffoldResidue(projectDir);
+		expect(recoveryArtifacts).toHaveLength(1);
+		expect(recoveryArtifacts[0]).toStartWith(
+			".autoresearch-scaffold-lock-recovery-",
+		);
+
+		setScaffoldFaultInjectorForTests();
+		const future = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "score-2",
+			overwrite: true,
+		});
+		expect(future.isError).not.toBe(true);
+		expect(listExperiments()).toHaveLength(2);
+		expect(await scaffoldResidue(projectDir)).toEqual(recoveryArtifacts);
+	});
+
+	it("restores prior data and preserves recovery evidence when installed-file removal fails", async () => {
+		const projectDir = await tempProjectDir();
+		const scaffoldDir = join(projectDir, "autoresearch");
+		await mkdir(scaffoldDir);
+		const files = ["program.md", "eval.sh", "results.tsv"];
+		for (const file of files) {
+			await writeFile(join(scaffoldDir, file), `original-${file}\n`);
+		}
+		setScaffoldFaultInjectorForTests((point) => {
+			if (point === "db-register") throw new Error("injected registration");
+			if (point === "rollback-remove-installed") {
+				throw new Error("injected installed removal");
+			}
+		});
+
+		const failed = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "score",
+			overwrite: true,
+		});
+
+		expect(failed.isError).toBe(true);
+		expect(failed.content[0]?.text).toContain("rollback failed");
+		expect(listExperiments()).toEqual([]);
+		for (const file of files) {
+			expect(await readFile(join(scaffoldDir, file), "utf8")).toBe(
+				`original-${file}\n`,
+			);
+		}
+		const residue = await scaffoldResidue(projectDir);
+		expect(residue).toHaveLength(1);
+		expect(residue[0]).toStartWith(".autoresearch-scaffold-");
+		expect(residue[0]).not.toContain("lock");
+	});
+
+	it("leaves only recoverable empty artifacts when new-directory rollback removal fails", async () => {
+		const projectDir = await tempProjectDir();
+		setScaffoldFaultInjectorForTests((point) => {
+			if (point === "db-register") throw new Error("injected registration");
+			if (point === "rollback-remove-directory") {
+				throw new Error("injected directory removal");
+			}
+		});
+
+		const failed = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "score",
+			overwrite: false,
+		});
+
+		expect(failed.isError).toBe(true);
+		expect(listExperiments()).toEqual([]);
+		expect(await readdir(join(projectDir, "autoresearch"))).toEqual([]);
+		const residue = await scaffoldResidue(projectDir);
+		expect(residue).toHaveLength(1);
+		expect(residue[0]).not.toContain("lock");
+
+		setScaffoldFaultInjectorForTests();
+		const recovered = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "score",
+			overwrite: false,
+		});
+		expect(recovered.isError).not.toBe(true);
+		expect(listExperiments()).toHaveLength(1);
+		expect(await scaffoldResidue(projectDir)).toEqual(residue);
+	});
+
+	it("preserves transaction backups and reports their exact path when restore fails", async () => {
+		const projectDir = await tempProjectDir();
+		const scaffoldDir = join(projectDir, "autoresearch");
+		await mkdir(scaffoldDir);
+		for (const file of ["program.md", "eval.sh", "results.tsv"]) {
+			await writeFile(join(scaffoldDir, file), `original-${file}\n`);
+		}
+		setScaffoldFaultInjectorForTests((point) => {
+			if (point === "db-register") throw new Error("injected registration");
+			if (point === "rollback-restore-backup") {
+				throw new Error("injected restore failure");
+			}
+		});
+
+		const result = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "score",
+			overwrite: true,
+		});
+
+		expect(result.isError).toBe(true);
+		const message = result.content[0]?.text ?? "";
+		const match = message.match(/recovery backups preserved at: ([^;\n]+)/);
+		expect(match).not.toBeNull();
+		const recoveryPath = match?.[1] as string;
+		expect(recoveryPath.startsWith(projectDir)).toBe(true);
+		expect((await readdir(recoveryPath)).sort()).toEqual([
+			"eval.sh",
+			"program.md",
+			"results.tsv",
+		]);
+		expect(listExperiments()).toEqual([]);
+		expect((await scaffoldResidue(projectDir)).length).toBe(1);
+	});
+
+	it.each([
+		"scaffold-mkdir",
+		"cleanup-transaction",
+	] satisfies ScaffoldFaultPoint[])(
+		"handles a one-shot %s failure without lock or staging residue",
+		async (faultPoint) => {
+			const projectDir = await tempProjectDir();
+			let injected = false;
+			setScaffoldFaultInjectorForTests((point) => {
+				if (!injected && point === faultPoint) {
+					injected = true;
+					throw new Error(`injected ${point}`);
+				}
+			});
+
+			const result = await scaffoldHandler()({
+				recipe_id: "prompt-optimization",
+				project_path: projectDir,
+				metric_name: "score",
+				overwrite: false,
+			});
+
+			expect(injected).toBe(true);
+			if (faultPoint === "cleanup-transaction") {
+				expect(result.isError).not.toBe(true);
+				expect(listExperiments()).toHaveLength(1);
+			} else {
+				expect(result.isError).toBe(true);
+				expect(listExperiments()).toEqual([]);
+			}
+			expect(await scaffoldResidue(projectDir)).toEqual([]);
+		},
+	);
+
+	it("reports committed success with recovery evidence after persistent transaction cleanup failure", async () => {
+		const projectDir = await tempProjectDir();
+		let cleanupAttempts = 0;
+		setScaffoldFaultInjectorForTests((point) => {
+			if (point === "cleanup-transaction") {
+				cleanupAttempts++;
+				throw new Error("injected persistent cleanup failure");
+			}
+		});
+
+		const committed = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "accuracy",
+			target_file: "target-prompt.md",
+			overwrite: false,
+		});
+
+		expect(committed.isError).not.toBe(true);
+		expect(cleanupAttempts).toBe(2);
+		expect(committed.content[0]?.text).toContain(
+			"transaction cleanup failed after commit",
+		);
+		expect(committed.content[0]?.text).toContain("Do not retry");
+		expect(listExperiments()).toHaveLength(1);
+		const message = committed.content[0]?.text ?? "";
+		const recoveryMatch = message.match(/Recovery Path: `([^`]+)`/);
+		expect(recoveryMatch).not.toBeNull();
+		const recoveryPath = recoveryMatch?.[1] as string;
+		expect(recoveryPath.startsWith(projectDir)).toBe(true);
+		expect(await pathExists(recoveryPath)).toBe(true);
+
+		const scaffoldDir = join(projectDir, "autoresearch");
+		expect(await readFile(join(scaffoldDir, "program.md"), "utf8")).toContain(
+			"- Metric Name: accuracy",
+		);
+		expect(await readFile(join(scaffoldDir, "eval.sh"), "utf8")).toBe(
+			await readFile(
+				resolveTemplatePath("prompt-optimization", "eval.sh"),
+				"utf8",
+			),
+		);
+		expect(await readFile(join(scaffoldDir, "results.tsv"), "utf8")).toBe(
+			"iteration\tscore\timproved\tchange_description\tduration_seconds\tcost_tokens\tcost_dollars\n",
+		);
+
+		setScaffoldFaultInjectorForTests();
+		const subsequent = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "accuracy-2",
+			target_file: "target-prompt.md",
+			overwrite: true,
+		});
+		expect(subsequent.isError).not.toBe(true);
+		expect(listExperiments()).toHaveLength(2);
+		expect(await pathExists(recoveryPath)).toBe(true);
+		expect(await readFile(join(scaffoldDir, "program.md"), "utf8")).toContain(
+			"- Metric Name: accuracy-2",
+		);
+	});
+
+	it("rejects an injected scaffold directory identity swap before install", async () => {
+		const projectDir = await tempProjectDir();
+		const outsideDir = await tempProjectDir();
+		const scaffoldDir = join(projectDir, "autoresearch");
+		const movedDir = join(projectDir, "autoresearch-moved");
+		let swapped = false;
+		setScaffoldFaultInjectorForTests(async (point) => {
+			if (!swapped && point === "install-rename") {
+				swapped = true;
+				await rename(scaffoldDir, movedDir);
+				await symlink(outsideDir, scaffoldDir, "dir");
+			}
+		});
+
+		const result = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "score",
+			overwrite: false,
+		});
+
+		expect(swapped).toBe(true);
+		expect(result.isError).toBe(true);
+		expect(result.content[0]?.text).toContain("identity changed");
+		expect(await readdir(outsideDir)).toEqual([]);
+		expect(listExperiments()).toEqual([]);
+	});
+
+	it("serializes concurrent scaffolds for the same canonical project", async () => {
+		const projectDir = await tempProjectDir();
+		let releaseFirst: (() => void) | undefined;
+		const blocked = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+		let reachedFirst: (() => void) | undefined;
+		const reached = new Promise<void>((resolve) => {
+			reachedFirst = resolve;
+		});
+		let held = false;
+		setScaffoldFaultInjectorForTests(async (point) => {
+			if (!held && point === "stage-write") {
+				held = true;
+				reachedFirst?.();
+				await blocked;
+			}
+		});
+		const handler = scaffoldHandler();
+		const args: ScaffoldArgs = {
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "score",
+			overwrite: false,
+		};
+		const first = handler(args);
+		await reached;
+		const second = await handler(args);
+		expect(second.isError).toBe(true);
+		expect(second.content[0]?.text).toContain("already in progress");
+		releaseFirst?.();
+		expect((await first).isError).not.toBe(true);
+		expect(listExperiments()).toHaveLength(1);
+		expect(await scaffoldResidue(projectDir)).toEqual([]);
 	});
 });

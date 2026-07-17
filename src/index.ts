@@ -14,16 +14,19 @@ import { registerMetaTools } from "./tools/meta.js";
 import { registerScaffoldingTools } from "./tools/scaffolding.js";
 import { VERSION } from "./version.js";
 
-export async function main(): Promise<void> {
+export async function main(
+	dependencies: {
+		loadCatalog?: typeof loadCatalog;
+		connect?: (server: McpServer) => Promise<void>;
+	} = {},
+): Promise<void> {
 	// Load catalog from YAML into SQLite
-	const catalogResult = await loadCatalog();
+	const catalogResult = await (dependencies.loadCatalog ?? loadCatalog)();
 	console.error(
 		`[autoresearch-mcp] Catalog loaded: ${catalogResult.loaded} new/updated, ${catalogResult.skipped} unchanged`,
 	);
 	if (catalogResult.errors.length > 0) {
-		for (const err of catalogResult.errors) {
-			console.error(`[autoresearch-mcp] Catalog error: ${err}`);
-		}
+		throw new Error(`Catalog load failed: ${catalogResult.errors.join("; ")}`);
 	}
 
 	// Create MCP server
@@ -44,8 +47,12 @@ export async function main(): Promise<void> {
 	registerPrompts(server);
 
 	// Connect via Stdio transport
-	const transport = new StdioServerTransport();
-	await server.connect(transport);
+	if (dependencies.connect) {
+		await dependencies.connect(server);
+	} else {
+		const transport = new StdioServerTransport();
+		await server.connect(transport);
+	}
 
 	console.error(
 		"[autoresearch-mcp] Server running on Stdio transport (Phase 1)",

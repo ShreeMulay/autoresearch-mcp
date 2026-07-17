@@ -22,6 +22,10 @@ User says any of: "optimize", "improve this", "run experiments", "find best tech
 - Time-critical fixes where experimentation delays matter ("production is down")
 - User explicitly says "just pick one" or "I don't care about optimal"
 
+## Data Safety Boundary
+
+Use synthetic, non-sensitive data only; examples and tests use synthetic data only. Never send PHI, patient identifiers, PHI-bearing prompts or model responses, clinical records, secrets, or production datasets to this MCP server, evaluators, review tooling, logs, fixtures, or CI.
+
 ## Core Philosophy
 
 Autoresearch is iterative improvement against a repeatable evaluation. The loop is:
