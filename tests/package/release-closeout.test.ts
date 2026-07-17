@@ -21,6 +21,7 @@ import { isAbsolute, join, resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "../..");
 const fixtureRoot = join(import.meta.dir, "fixtures");
+const fixtureTarball = join(fixtureRoot, "autoresearch-mcp-0.4.0.tgz");
 const manifestPath = join(root, "ci", "release-artifact.json");
 const controlPath = join(root, "ci", "release-control.ts");
 const smokePath = join(root, "ci", "package-smoke.sh");
@@ -49,7 +50,7 @@ beforeAll(async () => {
 	npmLog = join(sandbox, "npm.log");
 	gitLog = join(sandbox, "git.log");
 	tarball = join(sandbox, "autoresearch-mcp-0.4.0.tgz");
-	await Bun.$`npm pack ${root} --pack-destination ${sandbox} --ignore-scripts --loglevel error`.quiet();
+	await copyFile(fixtureTarball, tarball);
 	const tarballSha512 = createHash("sha512")
 		.update(await readFile(tarball))
 		.digest();
@@ -77,6 +78,7 @@ async function run(command: string, extra: Record<string, string> = {}) {
 		env: {
 			PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
 			FAKE_NPM_LOG: npmLog,
+			FAKE_NPM_PROJECT_ROOT: root,
 			FAKE_GIT_LOG: gitLog,
 			FAKE_NPM_TARBALL_SOURCE: tarball,
 			FAKE_NPM_SRI: tarballSri,
@@ -165,6 +167,20 @@ describe("closed release artifact", () => {
 		);
 	});
 
+	it("binds the canonical fixture SHA-256, SHA-512, and SRI to the release artifact", async () => {
+		const [value, fixture] = await Promise.all([
+			readFile(manifestPath, "utf8").then(JSON.parse),
+			readFile(fixtureTarball),
+		]);
+		const sha256 = createHash("sha256").update(fixture).digest("hex");
+		const sha512 = createHash("sha512").update(fixture).digest("hex");
+		expect(sha256).toBe(value.sha256);
+		expect(sha512).toBe(value.sha512);
+		expect(`sha512-${Buffer.from(sha512, "hex").toString("base64")}`).toBe(
+			value.integrity,
+		);
+	});
+
 	it("defines bounded fresh-cache reads", async () => {
 		const value = JSON.parse(await readFile(manifestPath, "utf8"));
 		expect(value.registryReads.attempts).toBeGreaterThanOrEqual(2);
@@ -213,7 +229,7 @@ describe("closed release artifact", () => {
 				),
 				writeFile(
 					fakeNpm,
-					`#!/bin/sh\nif [ "\${1:-}" = --version ]; then exec /usr/bin/npm --version; fi\nif [ "\${1:-}" = pack ]; then\n  destination=.\n  previous=\n  for argument in "$@"; do [ "$previous" = --pack-destination ] && destination="$argument"; previous="$argument"; done\n  cp "${tarball}" "$destination/autoresearch-mcp-0.4.0.tgz"\n  exit 0\nfi\nexit 64\n`,
+					`#!/bin/sh\nif [ "\${1:-}" = --version ]; then printf '10.9.4\\n'; exit 0; fi\nif [ "\${1:-}" = pack ]; then\n  destination=.\n  previous=\n  for argument in "$@"; do [ "$previous" = --pack-destination ] && destination="$argument"; previous="$argument"; done\n  cp "${fixtureTarball}" "$destination/autoresearch-mcp-0.4.0.tgz"\n  exit 0\nfi\nexit 64\n`,
 					{ mode: 0o755 },
 				),
 			]);
@@ -225,9 +241,7 @@ describe("closed release artifact", () => {
 					EXPECTED_NODE_VERSION: Bun.spawnSync(["node", "--version"])
 						.stdout.toString()
 						.trim(),
-					EXPECTED_NPM_VERSION: Bun.spawnSync(["npm", "--version"])
-						.stdout.toString()
-						.trim(),
+					EXPECTED_NPM_VERSION: "10.9.4",
 				},
 			});
 			expect(smoke.exitCode).not.toBe(0);

@@ -2,7 +2,8 @@
 set -eu
 
 if [[ -z "${FAKE_NPM_LOG:-}" ]]; then
-  exec /usr/bin/npm "$@"
+  printf 'fake npm: FAKE_NPM_LOG is required\n' >&2
+  exit 64
 fi
 
 log="${FAKE_NPM_LOG:?}"
@@ -63,8 +64,15 @@ case "$command_name" in
     cp "${FAKE_NPM_TARBALL_SOURCE:?}" "$destination/autoresearch-mcp-0.4.0.tgz"
     printf '%s\n' 'autoresearch-mcp-0.4.0.tgz'
     ;;
+  init) printf '%s\n' '{"name":"release-smoke-consumer","private":true}' > package.json ;;
+  install)
+    project_root="${FAKE_NPM_PROJECT_ROOT:?}"
+    mkdir -p node_modules/.bin
+    ln -sf "$project_root/bin/autoresearch-mcp" node_modules/.bin/autoresearch-mcp
+    ln -sf "$project_root/bin/autoresearch-install-skill" node_modules/.bin/autoresearch-install-skill
+    ;;
+  audit) ;;
   publish) [[ "${FAKE_NPM_PUBLISH_STATUS:-0}" == 0 ]] || exit "${FAKE_NPM_PUBLISH_STATUS}" ;;
   deprecate) ;;
-  init|install|audit|ls) exec /usr/bin/npm "$@" ;;
   *) printf 'fake npm: unsupported command: %s\n' "$*" >&2; exit 64 ;;
 esac
