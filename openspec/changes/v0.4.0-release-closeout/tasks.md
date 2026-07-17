@@ -23,10 +23,10 @@
 ## Phase 4 — Verification and Landing
 
 - [x] Run all local release gates and obtain independent Oracle GO.
-- [ ] Export Beads state and commit the complete change.
-- [ ] Push Forgejo branch, open PR, pass exact-head CI, merge, and restore protection.
-- [ ] Verify post-merge Forgejo main CI, mirror GitHub, and verify mirror CI.
-- [ ] Reconcile shared checkout and remove the clean worktree.
+- [x] Export Beads state and commit the complete change.
+- [x] Push Forgejo branch, open PR, pass exact-head CI, merge, and restore protection.
+- [x] Verify post-merge Forgejo main CI, mirror GitHub, and verify mirror CI.
+- [x] Reconcile shared checkout and remove the clean worktree.
 
 ## Phase 5 — Auth-Gated Registry Transaction
 
