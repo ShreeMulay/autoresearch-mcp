@@ -8,6 +8,9 @@ You are revising content using a two-loop workflow.
 The outer loop improves the generation or revision strategy.
 The inner loop applies that strategy to each article or content unit.
 
+## Data Safety
+Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, clinical records, secrets, PHI-bearing prompts or model responses, or production datasets to the server, evaluator, review tooling, logs, fixtures, or CI.
+
 ## Target
 - Primary artifacts: article drafts or content files
 - Strategy artifact: the reusable generation or revision approach

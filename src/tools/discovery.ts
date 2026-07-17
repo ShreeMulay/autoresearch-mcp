@@ -24,6 +24,7 @@ export interface RankRecipeOptions {
 	domain?: string;
 	hasScalarMetric?: boolean;
 	needsOvernight?: boolean;
+	maxExperimentDurationSeconds?: number;
 	searchResultIds?: Set<string>;
 }
 
@@ -33,7 +34,20 @@ export function rankRecipes(
 	opts: RankRecipeOptions,
 ): RankedRecipe[] {
 	const tokens = tokenizeProblem(problemText);
-	const scoredRecipes = recipes.map((recipe, index) => {
+	const compatibleRecipes = recipes.filter((recipe) => {
+		if (
+			opts.maxExperimentDurationSeconds === undefined ||
+			recipe.experiments_per_hour === undefined
+		) {
+			return true;
+		}
+
+		return (
+			3600 / recipe.experiments_per_hour <= opts.maxExperimentDurationSeconds
+		);
+	});
+	const scoredRecipes = compatibleRecipes.map((recipe) => {
+		const index = recipes.indexOf(recipe);
 		let score = 0;
 		const reasons: string[] = [];
 		const haystack = recipeHaystack(recipe);
@@ -41,6 +55,15 @@ export function rankRecipes(
 		if (opts.searchResultIds?.has(recipe.id)) {
 			score += 3;
 			reasons.push("Matches your problem description");
+		}
+
+		if (
+			opts.maxExperimentDurationSeconds !== undefined &&
+			recipe.experiments_per_hour === undefined
+		) {
+			reasons.push(
+				"Duration compatibility unverified: no throughput estimate is available",
+			);
 		}
 
 		const keywordMatches = tokens.filter((token) => haystack.includes(token));
@@ -463,6 +486,9 @@ export function registerDiscoveryTools(mcp: McpServer): void {
 			domain,
 		}) => {
 			try {
+				const maxExperimentDurationSeconds = max_experiment_duration
+					? parseDurationSeconds(max_experiment_duration)
+					: undefined;
 				// Search for relevant techniques using the problem description
 				const searchResults = searchCatalog(problem, { limit: 15 });
 				const recipes = listCatalogItems({ layer: "recipe" });
@@ -474,6 +500,7 @@ export function registerDiscoveryTools(mcp: McpServer): void {
 					domain,
 					hasScalarMetric: has_scalar_metric,
 					needsOvernight: needs_overnight,
+					maxExperimentDurationSeconds,
 					searchResultIds: new Set(
 						searchResults.map((result: CatalogItem) => result.id),
 					),
@@ -593,4 +620,32 @@ export function registerDiscoveryTools(mcp: McpServer): void {
 			}
 		},
 	);
+}
+
+export function parseDurationSeconds(input: string): number {
+	const trimmed = input.trim();
+	const match =
+		/^(\d+(?:\.\d+)?)\s+(s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?)$/i.exec(
+			trimmed,
+		);
+	if (!match) {
+		throw new Error(`Invalid duration: ${input}`);
+	}
+
+	const amount = Number(match[1]);
+	if (!Number.isFinite(amount) || amount <= 0) {
+		throw new Error("Duration must be a positive finite value");
+	}
+
+	const unit = (match[2] ?? "s").toLowerCase();
+	const multiplier = unit.startsWith("h")
+		? 3600
+		: unit.startsWith("m")
+			? 60
+			: 1;
+	const seconds = amount * multiplier;
+	if (!Number.isFinite(seconds)) {
+		throw new Error("Duration exceeds the supported finite range");
+	}
+	return seconds;
 }

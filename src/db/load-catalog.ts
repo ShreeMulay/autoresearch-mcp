@@ -8,6 +8,7 @@ import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { CatalogItemSchema } from "../types.js";
+import type { CatalogItem } from "../types.js";
 import { getDb } from "./schema.js";
 import {
 	deleteCatalogItemsNotIn,
@@ -43,13 +44,25 @@ export async function loadCatalog(catalogDir = CATALOG_ROOT): Promise<{
 	skipped: number;
 	errors: string[];
 }> {
-	let loaded = 0;
-	let skipped = 0;
-	const errors: string[] = [];
-	const seenIds = new Set<string>();
+	return loadCatalogWithDependencies(catalogDir);
+}
 
-	// Ensure DB is initialized
-	getDb();
+export async function loadCatalogWithDependencies(
+	catalogDir = CATALOG_ROOT,
+	dependencies: {
+		upsertCatalogItem?: typeof upsertCatalogItem;
+		deleteCatalogItemsNotIn?: typeof deleteCatalogItemsNotIn;
+		rebuildFts?: () => void;
+	} = {},
+): Promise<{ loaded: number; skipped: number; errors: string[] }> {
+	const errors: string[] = [];
+	const staged: Array<{
+		item: CatalogItem;
+		hash: string;
+		rawYaml: string;
+		filePath: string;
+	}> = [];
+	const filesById = new Map<string, string[]>();
 
 	for (const [layer, dirName] of Object.entries(LAYER_DIRS)) {
 		const dirPath = join(catalogDir, dirName);
@@ -73,30 +86,34 @@ export async function loadCatalog(catalogDir = CATALOG_ROOT): Promise<{
 				const hash = hashContent(content);
 
 				// Check if content has changed
-				const raw = parseYaml(content) as Record<string, unknown>;
-				const id = raw.id as string;
+				const document = parseYaml(content);
+				if (
+					typeof document !== "object" ||
+					document === null ||
+					Array.isArray(document)
+				) {
+					throw new Error("catalog document must be a YAML mapping");
+				}
+				const raw = document as Record<string, unknown>;
+				const id = typeof raw.id === "string" ? raw.id : "";
 
 				if (!id) {
 					errors.push(`Missing 'id' field in ${filePath}`);
 					continue;
 				}
-				if (seenIds.has(id)) {
-					errors.push(`duplicate catalog id ${id} in ${filePath}`);
-					continue;
-				}
+				filesById.set(id, [...(filesById.get(id) ?? []), filePath]);
 
 				const declaredLayer = raw.layer;
-				if (typeof declaredLayer === "string" && declaredLayer !== layer) {
+				if (typeof declaredLayer !== "string") {
 					errors.push(
-						`Catalog item ${id} declares layer ${declaredLayer} but is in ${layer}: ${filePath}`,
+						`Catalog item ${id} must declare a string layer matching ${layer}: ${filePath}`,
 					);
 					continue;
 				}
-				seenIds.add(id);
-
-				const existingHash = getContentHash(id);
-				if (existingHash === hash) {
-					skipped++;
+				if (declaredLayer !== layer) {
+					errors.push(
+						`Catalog item ${id} declares layer ${declaredLayer} but is in ${layer}: ${filePath}`,
+					);
 					continue;
 				}
 
@@ -113,7 +130,7 @@ export async function loadCatalog(catalogDir = CATALOG_ROOT): Promise<{
 				}
 
 				// Validate and parse
-				const parsed = CatalogItemSchema.safeParse({ ...raw, layer });
+				const parsed = CatalogItemSchema.safeParse(raw);
 				if (!parsed.success) {
 					errors.push(
 						`Validation error in ${filePath}: ${parsed.error.message}`,
@@ -121,9 +138,12 @@ export async function loadCatalog(catalogDir = CATALOG_ROOT): Promise<{
 					continue;
 				}
 
-				// Upsert into DB
-				upsertCatalogItem(parsed.data, hash, content);
-				loaded++;
+				staged.push({
+					filePath,
+					hash,
+					item: { ...parsed.data, tags: normalizeTags(parsed.data.tags) },
+					rawYaml: content,
+				});
 			} catch (err) {
 				errors.push(
 					`Error loading ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
@@ -132,12 +152,86 @@ export async function loadCatalog(catalogDir = CATALOG_ROOT): Promise<{
 		}
 	}
 
-	if (errors.length === 0) {
-		deleteCatalogItemsNotIn(Array.from(seenIds));
+	for (const [id, paths] of filesById) {
+		if (paths.length > 1) {
+			errors.push(`duplicate catalog id ${id} in ${paths.join(", ")}`);
+		}
 	}
-	rebuildCatalogFts();
 
-	return { loaded, skipped, errors };
+	validateReferences(staged, errors);
+	if (errors.length > 0) {
+		throw new Error(`Catalog validation failed:\n${errors.join("\n")}`);
+	}
+
+	let loaded = 0;
+	let skipped = 0;
+	const db = getDb();
+	db.exec("BEGIN IMMEDIATE");
+	try {
+		for (const entry of staged) {
+			if (getContentHash(entry.item.id) === entry.hash) {
+				skipped++;
+				continue;
+			}
+			(dependencies.upsertCatalogItem ?? upsertCatalogItem)(
+				entry.item,
+				entry.hash,
+				entry.rawYaml,
+			);
+			loaded++;
+		}
+		(dependencies.deleteCatalogItemsNotIn ?? deleteCatalogItemsNotIn)(
+			staged.map(({ item }) => item.id),
+		);
+		(dependencies.rebuildFts ?? rebuildCatalogFts)();
+		db.exec("COMMIT");
+	} catch (error) {
+		db.exec("ROLLBACK");
+		throw error;
+	}
+
+	return { loaded, skipped, errors: [] };
+}
+
+function normalizeTags(tags: string[]): string[] {
+	return Array.from(
+		new Set(tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean)),
+	);
+}
+
+function validateReferences(
+	staged: Array<{ item: CatalogItem; filePath: string }>,
+	errors: string[],
+): void {
+	const itemsById = new Map(staged.map((entry) => [entry.item.id, entry.item]));
+	for (const { item, filePath } of staged) {
+		for (const relatedId of item.related) {
+			if (!itemsById.has(relatedId)) {
+				errors.push(
+					`${filePath}: related technique ${relatedId} does not exist`,
+				);
+			}
+		}
+
+		const references = [
+			["search_strategy", item.composes?.search_strategy, "strategy"],
+			["evaluator", item.composes?.evaluator, "evaluator"],
+			["execution_pattern", item.composes?.execution_pattern, "pattern"],
+		] as const;
+		for (const [field, id, expectedLayer] of references) {
+			if (!id) continue;
+			const target = itemsById.get(id);
+			if (!target) {
+				errors.push(
+					`${filePath}: composition ${field} references missing ${id}`,
+				);
+			} else if (target.layer !== expectedLayer) {
+				errors.push(
+					`${filePath}: composition ${field} references ${id} in layer ${target.layer}, expected ${expectedLayer}`,
+				);
+			}
+		}
+	}
 }
 
 /**

@@ -1,21 +1,7 @@
-#!/bin/bash
-# Prompt optimization evaluator
-# Replace this with your actual evaluation logic.
-# This script must print a single float to stdout (higher = better).
-
+#!/usr/bin/env bash
 set -euo pipefail
 
-PROMPT_FILE="${1:-target-prompt.md}"
-
-if [[ ! -f "$PROMPT_FILE" ]]; then
-  # Replace this placeholder with a real failure signal if needed.
-  echo "0.0"
-  exit 0
-fi
-
-# Example placeholder flow:
-# 1. Load the prompt file
-# 2. Run it against a fixed eval set
-# 3. Aggregate the score
-
-echo "0.0"
+# Configure a fixed evaluation set and a real prompt-scoring harness here.
+# On success, the evaluator must print exactly one finite numeric score.
+printf '%s\n' 'autoresearch: configure a prompt evaluator with a fixed eval set and real scoring command' >&2
+exit 1

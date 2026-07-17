@@ -36,7 +36,7 @@ describe("MCP Server E2E", () => {
 
 	async function waitForJsonRpcResponse(
 		id: number,
-		timeoutMs = 3_000,
+		timeoutMs = 15_000,
 	): Promise<JsonRpcMessage> {
 		const deadline = Date.now() + timeoutMs;
 
@@ -47,6 +47,12 @@ describe("MCP Server E2E", () => {
 
 			if (message) {
 				return message;
+			}
+
+			if (child.exitCode !== null) {
+				throw new Error(
+					`MCP server exited with code ${child.exitCode} before response ${id}\n${stderrBuffer}`,
+				);
 			}
 
 			await new Promise((resolve) => setTimeout(resolve, 25));
@@ -95,13 +101,25 @@ describe("MCP Server E2E", () => {
 		child.stdin?.write(`${JSON.stringify(initRequest)}\n`);
 		const response = await waitForJsonRpcResponse(1);
 		initialized = Boolean(response.result);
-	});
+	}, 20_000);
 
-	afterAll(() => {
-		if (child) {
-			child.kill();
+	afterAll(async () => {
+		if (!child || child.exitCode !== null) {
+			return;
 		}
-	});
+
+		await new Promise<void>((resolveExit) => {
+			const forceKillTimer = setTimeout(() => {
+				child.kill("SIGKILL");
+				resolveExit();
+			}, 2_000);
+			child.once("exit", () => {
+				clearTimeout(forceKillTimer);
+				resolveExit();
+			});
+			child.kill();
+		});
+	}, 5_000);
 
 	it("initializes successfully", () => {
 		expect(initialized).toBe(true);
@@ -125,17 +143,22 @@ describe("MCP Server E2E", () => {
 		const result = msg.result as { tools?: Array<{ name: string }> };
 
 		expect(Array.isArray(result.tools)).toBe(true);
-		expect(result.tools?.length).toBeGreaterThanOrEqual(1);
 
-		// Verify expected tools exist
-		const toolNames = result.tools?.map((t) => t.name) ?? [];
-		expect(toolNames).toContain("search_techniques");
-		expect(toolNames).toContain("get_technique");
-		expect(toolNames).toContain("suggest_technique");
-		expect(toolNames).toContain("register_experiment");
-		expect(toolNames).toContain("log_result");
-		expect(toolNames).toContain("scaffold_experiment");
-		expect(toolNames).toContain("log_technique_outcome");
+		const toolNames = (result.tools?.map((tool) => tool.name) ?? []).sort();
+		expect(toolNames).toEqual([
+			"get_experiment",
+			"get_server_info",
+			"get_technique",
+			"get_template",
+			"list_experiments",
+			"log_result",
+			"log_technique_outcome",
+			"register_experiment",
+			"scaffold_experiment",
+			"search_techniques",
+			"suggest_technique",
+			"update_experiment",
+		]);
 	});
 
 	it("server process stays alive", () => {

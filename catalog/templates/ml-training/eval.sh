@@ -6,17 +6,14 @@ set -euo pipefail
 # If the natural metric is a loss, emit an inverted score such as -loss.
 
 if [[ -f metrics.json ]]; then
-  python - <<'PY'
-import json
-with open('metrics.json', 'r', encoding='utf-8') as fh:
-    metrics = json.load(fh)
-score = metrics.get('score')
-if score is None and 'validation_loss' in metrics:
-    score = -float(metrics['validation_loss'])
-if score is None:
-    raise SystemExit('metrics.json must contain score or validation_loss')
-print(float(score))
-PY
+  bun -e '
+    const metrics = await Bun.file("metrics.json").json();
+    const score = metrics.score ?? (metrics.validation_loss == null ? undefined : -Number(metrics.validation_loss));
+    if (score == null || typeof score !== "number" || !Number.isFinite(score)) {
+      throw new Error("metrics.json must contain a finite numeric score or validation_loss");
+    }
+    console.log(score);
+  '
   exit 0
 fi
 

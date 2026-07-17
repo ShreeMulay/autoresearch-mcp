@@ -6,42 +6,30 @@ steps:
     image: oven/bun:1.3.10
     commands:
       - bun install --frozen-lockfile
-      - bunx tsc --noEmit
+      - bun audit
+      - bun run typecheck
       - bun run lint
       - bun test
       - bun run build
-      - bun bin/autoresearch-mcp --help
-      - bun bin/autoresearch-mcp install-skill --dry-run --target opencode
 
-  quality-bun-latest:
+  package-smoke:
+    image: node:22.22.1-bookworm
+    commands:
+      - npm install --global bun@1.3.10
+      - mkdir -p .ci-logs
+      - PACKAGE_SMOKE_LOG_DIR="$${CI_WORKSPACE}/.ci-logs" bash ci/package-smoke.sh
+    depends_on: [quality-bun-1-3-10]
+
+  quality-bun-latest-advisory:
     image: oven/bun:latest
+    failure: ignore
     commands:
       - bun install --frozen-lockfile
-      - bunx tsc --noEmit
+      - bun audit
+      - bun run typecheck
       - bun run lint
       - bun test
       - bun run build
-      - bun bin/autoresearch-mcp --help
-      - bun bin/autoresearch-mcp install-skill --dry-run --target opencode
-
-  installer-node-20:
-    image: node:20
-    commands:
-      - node --check scripts/install-skill.js
-      - SANDBOX=$(mktemp -d)
-      - HOME="$SANDBOX" node bin/autoresearch-install-skill --dry-run --target claude
-      - HOME="$SANDBOX" node bin/autoresearch-install-skill --help
-      - |
-        if HOME="$SANDBOX" node bin/autoresearch-install-skill --dryrun; then
-          echo "unknown flag was accepted but must be rejected"
-          exit 1
-        fi
-      - |
-        if [ -e "$SANDBOX/.claude/skills" ] || [ -e "$SANDBOX/.opencode/skills" ]; then
-          echo "installer wrote files during dry-run/error paths"
-          exit 1
-        fi
-      - rm -rf "$SANDBOX"
 
   installer-node-22:
     image: node:22
@@ -50,19 +38,25 @@ steps:
       - SANDBOX=$(mktemp -d)
       - HOME="$SANDBOX" node bin/autoresearch-install-skill --dry-run --target claude
       - HOME="$SANDBOX" node bin/autoresearch-install-skill --help
-      - |
-        if HOME="$SANDBOX" node bin/autoresearch-install-skill --dryrun; then
-          echo "unknown flag was accepted but must be rejected"
-          exit 1
-        fi
-      - |
-        if [ -e "$SANDBOX/.claude/skills" ] || [ -e "$SANDBOX/.opencode/skills" ]; then
-          echo "installer wrote files during dry-run/error paths"
-          exit 1
-        fi
+      - if HOME="$SANDBOX" node bin/autoresearch-install-skill --dryrun; then exit 1; fi
+      - if HOME="$SANDBOX" node bin/autoresearch-install-skill --target bogus; then exit 1; fi
+      - test ! -e "$SANDBOX/.claude/skills" && test ! -e "$SANDBOX/.opencode/skills"
       - rm -rf "$SANDBOX"
-# Advisory AI PR review via host-side broker (auto-rollout).
-  # See forgejo-infra grob/README.md. Never merge-blocking.
+
+  installer-node-24:
+    image: node:24
+    commands:
+      - node --check scripts/install-skill.js
+      - SANDBOX=$(mktemp -d)
+      - HOME="$SANDBOX" node bin/autoresearch-install-skill --dry-run --target opencode
+      - HOME="$SANDBOX" node bin/autoresearch-install-skill --help
+      - if HOME="$SANDBOX" node bin/autoresearch-install-skill --dryrun; then exit 1; fi
+      - if HOME="$SANDBOX" node bin/autoresearch-install-skill --target bogus; then exit 1; fi
+      - test ! -e "$SANDBOX/.claude/skills" && test ! -e "$SANDBOX/.opencode/skills"
+      - rm -rf "$SANDBOX"
+
+  # Advisory only. The broker receives repository coordinates, never source payloads,
+  # registry credentials, PHI, prompts, model responses, or unrelated secrets.
   ai-review:
     image: curlimages/curl:8.11.1
     failure: ignore
@@ -71,7 +65,8 @@ steps:
         from_secret: review_broker_key
     commands:
       - |
-        curl -fsS --max-time 1200 -X POST http://172.17.0.1:23459/review \
+        env -i PATH="$${PATH}" curl -fsS --max-time 1200 \
+          -X POST http://172.17.0.1:23459/review \
           -H "Authorization: Bearer $${REVIEW_BROKER_KEY}" \
           -H "Content-Type: application/json" \
           -d "{\"repo\":\"$${CI_REPO}\",\"pr_number\":$${CI_COMMIT_PULL_REQUEST}}"

@@ -73,4 +73,29 @@ describe("rankRecipes", () => {
 		expect(ranked[0].recipe.id).toBe("rubric-recipe");
 		expect(ranked[1].recipe.id).toBe("benchmark-recipe");
 	});
+
+	it("a valid duration constraint can change ordering through compatibility filtering", () => {
+		const recipes = [
+			recipe("slow", { experiments_per_hour: 10 }),
+			recipe("fast", { experiments_per_hour: 200 }),
+		];
+		const roomy = rankRecipes(recipes, "optimization", {
+			maxExperimentDurationSeconds: 3600,
+		} as Parameters<typeof rankRecipes>[2]);
+		const constrained = rankRecipes(recipes, "optimization", {
+			maxExperimentDurationSeconds: 30,
+		} as Parameters<typeof rankRecipes>[2]);
+
+		expect(roomy.map(({ recipe }) => recipe.id)).toEqual(["slow", "fast"]);
+		expect(constrained.map(({ recipe }) => recipe.id)).toEqual(["fast"]);
+	});
+
+	it("marks missing throughput estimates as duration-unverified", () => {
+		const [ranked] = rankRecipes([recipe("unknown-speed")], "optimization", {
+			maxExperimentDurationSeconds: 30,
+		});
+		expect(ranked.reasons.join(" ")).toMatch(
+			/duration compatibility unverified/i,
+		);
+	});
 });

@@ -7,6 +7,7 @@ import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { ExperimentSpecSchema } from "../types.js";
 
 function getDefaultDbPath(): string {
 	return join(
@@ -137,6 +138,129 @@ interface Migration {
 	version: number;
 	name: string;
 	sql: string;
+	apply?: (db: Database) => void;
+}
+
+function migrateLegacyResultSemantics(db: Database): void {
+	const experiments = db
+		.prepare(
+			`SELECT id, spec
+			 FROM experiments
+			 ORDER BY id`,
+		)
+		.all() as { id: string; spec: string }[];
+	const updateSpec = db.prepare(
+		"UPDATE experiments SET spec = $spec WHERE id = $id",
+	);
+	const updateResult = db.prepare(
+		"UPDATE experiment_results SET is_baseline = $is_baseline, improved = $improved WHERE id = $id",
+	);
+	const updateBestScore = db.prepare(
+		"UPDATE experiments SET best_score = $best_score WHERE id = $id",
+	);
+
+	for (const experiment of experiments) {
+		let spec: unknown;
+		try {
+			spec = JSON.parse(experiment.spec);
+		} catch {
+			throw new Error(
+				`Cannot migrate experiment ${experiment.id}: invalid spec JSON`,
+			);
+		}
+		let directionMissing = false;
+		let candidate = spec;
+		if (typeof spec === "object" && spec !== null && !Array.isArray(spec)) {
+			directionMissing = !Object.hasOwn(spec, "metric_direction");
+			if (directionMissing) {
+				candidate = { ...spec, metric_direction: "maximize" };
+			}
+		}
+		const parsed = ExperimentSpecSchema.safeParse(candidate);
+		if (!parsed.success) {
+			throw new Error(
+				`Cannot migrate experiment ${experiment.id}: invalid spec: ${parsed.error.message}`,
+			);
+		}
+		if (directionMissing) {
+			updateSpec.run({
+				$id: experiment.id,
+				$spec: JSON.stringify(parsed.data),
+			});
+		}
+		const direction = parsed.data.metric_direction;
+
+		const results = db
+			.prepare(
+				"SELECT id, score FROM experiment_results WHERE experiment_id = $experiment_id ORDER BY iteration ASC, id ASC",
+			)
+			.all({ $experiment_id: experiment.id }) as {
+			id: number;
+			score: number;
+		}[];
+		if (results.length === 0) {
+			continue;
+		}
+		const baseline = results[0];
+		if (!baseline || !Number.isFinite(baseline.score)) {
+			throw new Error(
+				`Cannot migrate experiment ${experiment.id}: result scores must be finite numbers`,
+			);
+		}
+
+		let champion = baseline.score;
+		for (const [index, result] of results.entries()) {
+			if (!Number.isFinite(result.score)) {
+				throw new Error(
+					`Cannot migrate experiment ${experiment.id}: result scores must be finite numbers`,
+				);
+			}
+			const improved =
+				index > 0 &&
+				(direction === "maximize"
+					? result.score > champion
+					: result.score < champion);
+			updateResult.run({
+				$id: result.id,
+				$improved: improved ? 1 : 0,
+				$is_baseline: index === 0 ? 1 : 0,
+			});
+			if (improved) champion = result.score;
+		}
+		updateBestScore.run({ $best_score: champion, $id: experiment.id });
+	}
+
+	db.exec(`
+		UPDATE experiments
+		SET
+		  total_iterations = (
+		    SELECT COUNT(*) FROM experiment_results
+		    WHERE experiment_id = experiments.id
+		  ),
+		  successful_iterations = (
+		    SELECT COALESCE(SUM(improved), 0) FROM experiment_results
+		    WHERE experiment_id = experiments.id
+		  ),
+		  cost_tokens = (
+		    SELECT COALESCE(SUM(cost_tokens), 0) FROM experiment_results
+		    WHERE experiment_id = experiments.id
+		  ),
+		  cost_dollars = (
+		    SELECT COALESCE(SUM(cost_dollars), 0) FROM experiment_results
+		    WHERE experiment_id = experiments.id
+		  ),
+		  cost_wall_seconds = (
+		    SELECT COALESCE(SUM(duration_seconds), 0) FROM experiment_results
+		    WHERE experiment_id = experiments.id
+		  ),
+		  best_score = CASE
+		    WHEN EXISTS (
+		      SELECT 1 FROM experiment_results
+		      WHERE experiment_id = experiments.id
+		    ) THEN best_score
+		    ELSE NULL
+		  END
+	`);
 }
 
 const MIGRATIONS: Migration[] = [
@@ -204,6 +328,7 @@ const MIGRATIONS: Migration[] = [
       ALTER TABLE experiment_results
       ADD COLUMN is_baseline INTEGER NOT NULL DEFAULT 0;
     `,
+		apply: migrateLegacyResultSemantics,
 	},
 ];
 
@@ -232,9 +357,9 @@ export function getDb(): Database {
 	if (!_db) {
 		ensureDbParent(_dbPath);
 		_db = new Database(_dbPath, { create: true });
+		_db.exec("PRAGMA busy_timeout = 5000");
 		_db.exec("PRAGMA journal_mode = WAL");
 		_db.exec("PRAGMA foreign_keys = ON");
-		_db.exec("PRAGMA busy_timeout = 5000");
 		runMigrations(_db);
 	}
 
@@ -278,22 +403,22 @@ function runMigrations(db: Database): void {
     )
   `);
 
-	const appliedRows = db.prepare("SELECT version FROM _migrations").all() as {
-		version: number;
-	}[];
-	const applied = new Set(appliedRows.map((row) => row.version));
-
 	for (const migration of MIGRATIONS) {
-		if (applied.has(migration.version)) {
-			continue;
-		}
-
 		db.exec("BEGIN IMMEDIATE");
 		try {
+			const alreadyApplied = db
+				.prepare("SELECT 1 FROM _migrations WHERE version = $version")
+				.get({ $version: migration.version });
+			if (alreadyApplied) {
+				db.exec("COMMIT");
+				continue;
+			}
+
 			const sql = migration.sql.trim();
 			if (sql) {
 				db.exec(sql);
 			}
+			migration.apply?.(db);
 
 			db.prepare(
 				"INSERT INTO _migrations (version, name) VALUES ($version, $name)",

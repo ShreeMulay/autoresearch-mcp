@@ -27,8 +27,8 @@ source: Human-in-the-loop safety review workflow
 tags: [safety, manual, high-stakes, checkpoint]
 related: [pairwise-comparison, regression-detector]
 examples:
-  - domain: medical-content
-    description: Require clinician review before patient-facing educational material is published.
+  - domain: public communications
+    description: Require an editor to review a synthetic public-service announcement before publication.
     metric: human approval status
     result: approved
   - domain: finance

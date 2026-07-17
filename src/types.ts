@@ -104,7 +104,7 @@ export const CatalogItemSchema = z.object({
 		.optional()
 		.describe("For recipes: what this composes from other layers"),
 	estimated_cost: z.string().optional(),
-	experiments_per_hour: z.number().optional(),
+	experiments_per_hour: z.number().finite().positive().optional(),
 	requires_gpu: z.boolean().default(false),
 });
 export type CatalogItem = z.infer<typeof CatalogItemSchema>;
@@ -129,14 +129,29 @@ export type TechniqueSpec = z.infer<typeof TechniqueSpecSchema>;
 // ExperimentSpec — the runnable experiment contract
 // ============================================================
 
+const NonnegativeFiniteNumber = z.number().finite().nonnegative();
+
 export const BudgetSchema = z.object({
 	max_iterations: z
 		.number()
+		.finite()
+		.int()
+		.nonnegative()
 		.optional()
 		.describe("Maximum experiment iterations"),
-	max_time_seconds: z.number().optional().describe("Maximum wall-clock time"),
-	max_tokens: z.number().optional().describe("Maximum LLM tokens to spend"),
-	max_dollars: z.number().optional().describe("Maximum dollar cost"),
+	max_time_seconds: NonnegativeFiniteNumber.optional().describe(
+		"Maximum wall-clock time",
+	),
+	max_tokens: z
+		.number()
+		.finite()
+		.int()
+		.nonnegative()
+		.optional()
+		.describe("Maximum LLM tokens to spend"),
+	max_dollars: NonnegativeFiniteNumber.optional().describe(
+		"Maximum dollar cost",
+	),
 });
 
 export const RiskPolicySchema = z.object({
@@ -158,16 +173,29 @@ export const RiskPolicySchema = z.object({
 		.describe("No access to env secrets"),
 });
 
-export const ConstraintsSchema = z.object({
-	metric_floors: z
-		.record(z.string(), z.number())
-		.default({})
-		.describe("Minimum acceptable values for metrics"),
-	metric_ceilings: z
-		.record(z.string(), z.number())
-		.default({})
-		.describe("Maximum acceptable values for metrics"),
-});
+export const ConstraintsSchema = z
+	.object({
+		metric_floors: z
+			.record(z.string(), z.number().finite())
+			.default({})
+			.describe("Minimum acceptable values for metrics"),
+		metric_ceilings: z
+			.record(z.string(), z.number().finite())
+			.default({})
+			.describe("Maximum acceptable values for metrics"),
+	})
+	.superRefine(({ metric_ceilings, metric_floors }, ctx) => {
+		for (const [metric, floor] of Object.entries(metric_floors)) {
+			const ceiling = metric_ceilings[metric];
+			if (ceiling !== undefined && floor > ceiling) {
+				ctx.addIssue({
+					code: "custom",
+					message: `Metric floor for ${metric} must not exceed its ceiling`,
+					path: ["metric_floors", metric],
+				});
+			}
+		}
+	});
 
 export const AcceptanceRule = z.enum([
 	"strict-improvement",

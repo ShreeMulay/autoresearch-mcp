@@ -23,6 +23,7 @@ Your job is to find faster approaches without breaking correctness.
 Do not break existing tests.
 If there is a test suite, keep it passing after every accepted change.
 If a faster version fails correctness checks, it is not an improvement.
+Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, clinical records, secrets, PHI-bearing prompts or model responses, or production datasets to the server, evaluator, review tooling, logs, fixtures, or CI.
 
 ## Core Loop
 1. Understand the hot path

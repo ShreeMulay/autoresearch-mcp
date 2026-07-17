@@ -1,9 +1,14 @@
 import {
-	access,
 	chmod,
 	lstat,
 	mkdir,
+	mkdtemp,
 	readFile,
+	realpath,
+	rename,
+	rm,
+	rmdir,
+	stat,
 	writeFile,
 } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
@@ -27,6 +32,43 @@ const ALLOWED_TEMPLATE_NAMES = new Set([
 	"results.tsv",
 ]);
 
+const activeScaffolds = new Set<string>();
+const LOCK_REMOVE_ATTEMPTS = 3;
+const TRANSACTION_REMOVE_ATTEMPTS = 2;
+const MetricDirectionSchema = z
+	.enum(["minimize", "maximize"])
+	.default("maximize");
+
+export type ScaffoldFaultPoint =
+	| "lock-mkdir"
+	| "lock-remove"
+	| "stage-mkdir"
+	| "backup-mkdir"
+	| "stage-write"
+	| "stage-chmod"
+	| "scaffold-mkdir"
+	| "backup-rename"
+	| "install-rename"
+	| "db-register"
+	| "rollback-remove-installed"
+	| "rollback-restore-backup"
+	| "rollback-remove-directory"
+	| "cleanup-transaction";
+
+type ScaffoldFaultInjector = (
+	point: ScaffoldFaultPoint,
+	path: string,
+) => void | Promise<void>;
+
+let scaffoldFaultInjector: ScaffoldFaultInjector | undefined;
+
+/** Test seam for deterministic filesystem-boundary failures. */
+export function setScaffoldFaultInjectorForTests(
+	injector?: ScaffoldFaultInjector,
+): void {
+	scaffoldFaultInjector = injector;
+}
+
 export function registerScaffoldingTools(mcp: McpServer): void {
 	mcp.tool(
 		"scaffold_experiment",
@@ -37,6 +79,9 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 				.string()
 				.describe("Project directory where files should be created"),
 			metric_name: z.string().describe("Primary metric for the experiment"),
+			metric_direction: MetricDirectionSchema.describe(
+				"Whether lower or higher scores are better",
+			),
 			target_file: z
 				.string()
 				.optional()
@@ -61,6 +106,7 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 			recipe_id,
 			project_path,
 			metric_name,
+			metric_direction,
 			target_file,
 			custom_instructions,
 			overwrite,
@@ -83,93 +129,150 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 					};
 				}
 
-				const resolvedProjectPath = resolve(project_path);
-				await access(resolvedProjectPath);
-
-				const targetArtifact = resolveTargetArtifact(
-					resolvedProjectPath,
-					target_file,
-				);
-
-				if (!targetArtifact) {
-					return {
-						content: [
-							{
-								type: "text" as const,
-								text: "target_file must resolve inside project_path",
-							},
-						],
-						isError: true,
-					};
+				const resolvedProjectPath = await canonicalProjectRoot(project_path);
+				const projectIdentity = identityOf(await stat(resolvedProjectPath));
+				if (activeScaffolds.has(resolvedProjectPath)) {
+					throw new Error(
+						joinText(
+							"A scaffold operation is already in progress for project: ",
+							resolvedProjectPath,
+						),
+					);
 				}
-
-				const autoresearchDir = join(resolvedProjectPath, "autoresearch");
-				const programPath = join(autoresearchDir, "program.md");
-				const evalPath = join(autoresearchDir, "eval.sh");
-				const resultsPath = join(autoresearchDir, "results.tsv");
-
-				await ensureSafeScaffoldDirectory(autoresearchDir);
-				await mkdir(autoresearchDir, { recursive: true });
-				await ensureScaffoldFilesWritable(
-					[programPath, evalPath, resultsPath],
-					overwrite,
+				activeScaffolds.add(resolvedProjectPath);
+				const projectLockPath = join(
+					resolvedProjectPath,
+					".autoresearch-scaffold.lock",
 				);
+				let projectLockAcquired = false;
+				let projectLockIdentity: PathIdentity | null = null;
 
-				const evaluatorCommand = "./autoresearch/eval.sh";
-				const programContent = await buildScaffoldProgramContent({
-					recipe,
-					metricName: metric_name,
-					targetFile: target_file,
-					targetArtifact,
-					customInstructions: custom_instructions,
-					evaluatorCommand,
-				});
-				const evalContent = await buildScaffoldEvalContent(recipe.id, {
-					metricName: metric_name,
-				});
-				const resultsContent = buildResultsTemplate();
+				try {
+					try {
+						await guardedMutation(
+							"lock-mkdir",
+							projectLockPath,
+							[[resolvedProjectPath, projectIdentity]],
+							async () => mkdir(projectLockPath),
+						);
+						projectLockAcquired = true;
+						projectLockIdentity = identityOf(await stat(projectLockPath));
+					} catch (error) {
+						if (isAlreadyExistsError(error)) {
+							throw new Error(
+								joinText(
+									"A scaffold operation is already in progress for project: ",
+									resolvedProjectPath,
+								),
+							);
+						}
+						throw error;
+					}
 
-				await writeFile(programPath, programContent, "utf8");
-				await writeFile(evalPath, evalContent, "utf8");
-				await writeFile(resultsPath, resultsContent, "utf8");
-				await makeEvalExecutable(evalPath);
+					const targetArtifact = await resolveTargetArtifact(
+						resolvedProjectPath,
+						target_file,
+					);
 
-				const experimentId = crypto.randomUUID();
-				const spec = buildScaffoldExperimentSpec({
-					targetArtifact,
-					metricName: metric_name,
-					recipeId: recipe.id,
-					evaluatorCommand,
-					budget,
-					riskPolicy: risk_policy,
-					constraints,
-				});
+					if (!targetArtifact) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: "target_file must resolve inside project_path",
+								},
+							],
+							isError: true,
+						};
+					}
 
-				createExperiment({
-					id: experimentId,
-					spec,
-					project_path: resolvedProjectPath,
-					project_name: getProjectName(resolvedProjectPath),
-					status: "scaffolded",
-				});
+					const autoresearchDir = join(resolvedProjectPath, "autoresearch");
+					const programPath = join(autoresearchDir, "program.md");
+					const evalPath = join(autoresearchDir, "eval.sh");
+					const resultsPath = join(autoresearchDir, "results.tsv");
+					const destinationPaths: [string, string, string] = [
+						programPath,
+						evalPath,
+						resultsPath,
+					];
 
-				const lines = [
-					"# Experiment Scaffolded",
-					"",
-					joinText("Experiment ID: ", inlineCode(experimentId)),
-					joinText("Recipe: ", inlineCode(recipe.id)),
-					joinText("Project Path: ", inlineCode(resolvedProjectPath)),
-					joinText("Metric: ", metric_name),
-					"",
-					"Created Files:",
-					joinText("- ", programPath),
-					joinText("- ", evalPath),
-					joinText("- ", resultsPath),
-				];
+					await ensureSafeScaffoldDirectory(autoresearchDir);
+					await ensureScaffoldFilesWritable(destinationPaths, overwrite);
 
-				return {
-					content: [{ type: "text" as const, text: lines.join("\n") }],
-				};
+					const evaluatorCommand = "./autoresearch/eval.sh";
+					const spec = buildScaffoldExperimentSpec({
+						targetArtifact,
+						metricName: metric_name,
+						metricDirection: metric_direction,
+						recipeId: recipe.id,
+						evaluatorCommand,
+						budget,
+						riskPolicy: risk_policy,
+						constraints,
+					});
+					const programContent = await buildScaffoldProgramContent({
+						recipe,
+						metricName: metric_name,
+						targetFile: target_file,
+						targetArtifact,
+						customInstructions: custom_instructions,
+						spec,
+					});
+					const evalContent = await buildScaffoldEvalContent(recipe.id, {
+						metricName: metric_name,
+					});
+					const resultsContent = buildResultsTemplate();
+
+					const experimentId = crypto.randomUUID();
+					const { cleanupRecoveryPath } = await installScaffoldTransaction({
+						autoresearchDir,
+						contents: [programContent, evalContent, resultsContent],
+						destinationPaths,
+						experimentId,
+						overwrite,
+						projectIdentity,
+						projectPath: resolvedProjectPath,
+						spec,
+					});
+
+					const lines = [
+						"# Experiment Scaffolded",
+						"",
+						joinText("Experiment ID: ", inlineCode(experimentId)),
+						joinText("Recipe: ", inlineCode(recipe.id)),
+						joinText("Project Path: ", inlineCode(resolvedProjectPath)),
+						joinText("Metric: ", metric_name),
+						"",
+						"Created Files:",
+						joinText("- ", programPath),
+						joinText("- ", evalPath),
+						joinText("- ", resultsPath),
+					];
+					if (cleanupRecoveryPath) {
+						lines.push(
+							"",
+							"Warning: transaction cleanup failed after commit; the scaffold and experiment row are committed. Do not retry this scaffold operation.",
+							joinText("Recovery Path: ", inlineCode(cleanupRecoveryPath)),
+						);
+					}
+
+					return {
+						content: [{ type: "text" as const, text: lines.join("\n") }],
+					};
+				} finally {
+					try {
+						if (projectLockAcquired && projectLockIdentity) {
+							await releaseProjectLock({
+								lockIdentity: projectLockIdentity,
+								lockPath: projectLockPath,
+								projectIdentity,
+								projectPath: resolvedProjectPath,
+							});
+						}
+					} finally {
+						activeScaffolds.delete(resolvedProjectPath);
+					}
+				}
 			} catch (error) {
 				return toolError(error, "Failed to scaffold experiment");
 			}
@@ -233,26 +336,34 @@ async function buildScaffoldProgramContent(args: {
 	targetFile?: string;
 	targetArtifact: string;
 	customInstructions?: string;
-	evaluatorCommand: string;
+	spec: ExperimentSpec;
 }): Promise<string> {
 	const templatePath = resolveTemplatePath(args.recipe.id, "program.md");
 
 	const curated = await readTemplateFileOrNull(templatePath);
 
 	if (curated !== null) {
-		return appendExperimentMetadata(curated, {
+		return normalizeGeneratedProgram(curated, {
+			customInstructions: args.customInstructions,
 			metricName: args.metricName,
+			spec: args.spec,
 			targetArtifact: args.targetFile ?? args.targetArtifact,
-			evaluatorCommand: args.evaluatorCommand,
 		});
 	}
 
-	return buildProgramTemplate({
-		recipe: args.recipe,
-		metricName: args.metricName,
-		targetFile: args.targetFile,
-		customInstructions: args.customInstructions,
-	});
+	return normalizeGeneratedProgram(
+		buildProgramTemplate({
+			recipe: args.recipe,
+			metricName: args.metricName,
+			targetFile: args.targetFile,
+		}),
+		{
+			customInstructions: args.customInstructions,
+			metricName: args.metricName,
+			spec: args.spec,
+			targetArtifact: args.targetFile ?? args.targetArtifact,
+		},
+	);
 }
 
 async function buildScaffoldEvalContent(
@@ -284,40 +395,112 @@ export async function readTemplateFileOrNull(
 	}
 }
 
-function appendExperimentMetadata(
+function normalizeGeneratedProgram(
 	content: string,
 	args: {
+		customInstructions?: string;
 		metricName: string;
+		spec: ExperimentSpec;
 		targetArtifact: string;
-		evaluatorCommand: string;
 	},
 ): string {
+	const withoutGeneratedSections = removeGeneratedSection(
+		removeGeneratedSection(content, "Run Controls"),
+		"Experiment Metadata",
+	);
+	const budget = args.spec.budget;
+	const risk = args.spec.risk_policy;
+	const constraints = args.spec.constraints;
+
 	return joinText(
 		[
-			content.trimEnd(),
+			withoutGeneratedSections.trimEnd(),
 			"",
 			"## Experiment Metadata",
 			joinText("- Metric Name: ", sanitizeInline(args.metricName)),
 			joinText("- Target Artifact: ", sanitizeInline(args.targetArtifact)),
-			"- Metric Direction: maximize",
-			joinText("- Evaluator Command: ", sanitizeInline(args.evaluatorCommand)),
+			"",
+			"## Run Controls",
+			joinText(
+				"- Custom Instructions: ",
+				args.customInstructions
+					? sanitizeInline(args.customInstructions)
+					: "none",
+			),
+			"- Budget:",
+			joinText(
+				"  - max_iterations: ",
+				formatControlValue(budget.max_iterations),
+			),
+			joinText(
+				"  - max_time_seconds: ",
+				formatControlValue(budget.max_time_seconds),
+			),
+			joinText("  - max_tokens: ", formatControlValue(budget.max_tokens)),
+			joinText("  - max_dollars: ", formatControlValue(budget.max_dollars)),
+			"- Risk Policy:",
+			joinText("  - sandbox_only: ", String(risk.sandbox_only)),
+			joinText("  - requires_approval: ", String(risk.requires_approval)),
+			joinText("  - network_denied: ", String(risk.network_denied)),
+			joinText("  - secrets_denied: ", String(risk.secrets_denied)),
+			"- Constraints:",
+			joinText(
+				"  - metric_floors: ",
+				formatConstraintMap(constraints.metric_floors),
+			),
+			joinText(
+				"  - metric_ceilings: ",
+				formatConstraintMap(constraints.metric_ceilings),
+			),
+			joinText(
+				"- Stopping Conditions: ",
+				args.spec.stopping_conditions.join(", "),
+			),
+			joinText("- Metric Direction: ", args.spec.metric_direction),
+			joinText(
+				"- Evaluator Command: ",
+				sanitizeInline(args.spec.evaluator_command),
+			),
 		].join("\n"),
 		"\n",
 	);
+}
+
+function removeGeneratedSection(content: string, heading: string): string {
+	const lines = content.split(/\r?\n/);
+	const sectionHeading = joinText("## ", heading);
+	const retained: string[] = [];
+	let skipping = false;
+	for (const line of lines) {
+		if (line.trim() === sectionHeading) {
+			skipping = true;
+			continue;
+		}
+		if (skipping && /^##\s+/.test(line)) skipping = false;
+		if (!skipping) retained.push(line);
+	}
+	return retained.join("\n");
+}
+
+function formatControlValue(value: number | undefined): string {
+	return value === undefined ? "not set" : String(value);
+}
+
+function formatConstraintMap(values: Record<string, number>): string {
+	const ordered = Object.fromEntries(
+		Object.entries(values).sort(([left], [right]) => left.localeCompare(right)),
+	);
+	return JSON.stringify(ordered);
 }
 
 function buildProgramTemplate(args: {
 	recipe: CatalogItem;
 	metricName: string;
 	targetFile?: string;
-	customInstructions?: string;
 }): string {
 	const metricName = sanitizeInline(args.metricName);
 	const targetFile = args.targetFile
 		? sanitizeInline(args.targetFile)
-		: undefined;
-	const customInstructions = args.customInstructions
-		? sanitizeInline(args.customInstructions)
 		: undefined;
 	const strategyHints = getStrategyHints(args.recipe);
 	const modifyTargets = targetFile
@@ -360,10 +543,6 @@ function buildProgramTemplate(args: {
 		"## Strategy Hints",
 		...strategyHints,
 	];
-
-	if (customInstructions) {
-		lines.push("", "## Custom Instructions", customInstructions);
-	}
 
 	lines.push(
 		"",
@@ -436,6 +615,7 @@ function buildDefaultTemplate(
 function buildScaffoldExperimentSpec(args: {
 	targetArtifact: string;
 	metricName: string;
+	metricDirection?: ExperimentSpec["metric_direction"];
 	recipeId: string;
 	evaluatorCommand: string;
 	budget?: ExperimentSpec["budget"];
@@ -449,7 +629,7 @@ function buildScaffoldExperimentSpec(args: {
 		mutation_strategy: "LLM edit",
 		evaluator_command: args.evaluatorCommand,
 		metric_name: args.metricName,
-		metric_direction: "maximize",
+		metric_direction: MetricDirectionSchema.parse(args.metricDirection),
 		acceptance_rule: "strict-improvement",
 		budget: BudgetSchema.parse(args.budget ?? {}),
 		environment: {},
@@ -496,6 +676,399 @@ export function resolveTemplatePath(
 	return templatePath;
 }
 
+async function canonicalProjectRoot(projectPath: string): Promise<string> {
+	const canonical = await realpath(resolve(projectPath));
+	const projectStat = await stat(canonical);
+	if (!projectStat.isDirectory()) {
+		throw new Error(joinText("Project path is not a directory: ", canonical));
+	}
+	return canonical;
+}
+
+interface PathIdentity {
+	dev: number | bigint;
+	ino: number | bigint;
+}
+
+function identityOf(value: Awaited<ReturnType<typeof stat>>): PathIdentity {
+	return { dev: value.dev, ino: value.ino };
+}
+
+async function assertIdentity(
+	path: string,
+	expected: PathIdentity,
+): Promise<void> {
+	const actual = await lstat(path);
+	if (
+		actual.isSymbolicLink() ||
+		actual.dev !== expected.dev ||
+		actual.ino !== expected.ino
+	) {
+		throw new Error(
+			`Scaffold path identity changed or became a symlink: ${path}`,
+		);
+	}
+}
+
+async function guardedMutation(
+	point: ScaffoldFaultPoint,
+	path: string,
+	identities: Array<readonly [string, PathIdentity]>,
+	mutation: () => Promise<void>,
+): Promise<void> {
+	for (const [identityPath, identity] of identities) {
+		await assertIdentity(identityPath, identity);
+	}
+	await scaffoldFaultInjector?.(point, path);
+	for (const [identityPath, identity] of identities) {
+		await assertIdentity(identityPath, identity);
+	}
+	await mutation();
+}
+
+async function releaseProjectLock(args: {
+	lockIdentity: PathIdentity;
+	lockPath: string;
+	projectIdentity: PathIdentity;
+	projectPath: string;
+}): Promise<void> {
+	for (let attempt = 0; attempt < LOCK_REMOVE_ATTEMPTS; attempt++) {
+		try {
+			await guardedMutation(
+				"lock-remove",
+				args.lockPath,
+				[
+					[args.projectPath, args.projectIdentity],
+					[args.lockPath, args.lockIdentity],
+				],
+				async () => rmdir(args.lockPath),
+			);
+			return;
+		} catch {
+			// Retry a bounded number of times before preserving the lock as recovery data.
+		}
+	}
+
+	const recoveryPath = join(
+		args.projectPath,
+		`.autoresearch-scaffold-lock-recovery-${crypto.randomUUID()}`,
+	);
+	try {
+		await assertIdentity(args.projectPath, args.projectIdentity);
+		await assertIdentity(args.lockPath, args.lockIdentity);
+		await rename(args.lockPath, recoveryPath);
+	} catch {
+		// Lock cleanup is post-commit. A final identity-checked removal avoids turning a
+		// committed scaffold into an error or leaving a stale lock that blocks recovery.
+		try {
+			await assertIdentity(args.projectPath, args.projectIdentity);
+			await assertIdentity(args.lockPath, args.lockIdentity);
+			await rm(args.lockPath, { force: true, recursive: true });
+		} catch {
+			// There is no safe post-commit rollback. In-process exclusion remains active
+			// until the caller's finally block completes.
+		}
+	}
+}
+
+async function cleanupTransaction(
+	transactionDir: string,
+	identities: Array<readonly [string, PathIdentity]>,
+): Promise<string | null> {
+	for (let attempt = 0; attempt < TRANSACTION_REMOVE_ATTEMPTS; attempt++) {
+		try {
+			await guardedMutation(
+				"cleanup-transaction",
+				transactionDir,
+				identities,
+				async () => rm(transactionDir, { force: true, recursive: true }),
+			);
+			return null;
+		} catch {
+			// Retry before quarantining committed transaction artifacts as recovery data.
+		}
+	}
+
+	const projectPath = identities[0]?.[0];
+	if (!projectPath) return transactionDir;
+	const recoveryPath = join(
+		projectPath,
+		`.autoresearch-scaffold-transaction-recovery-${crypto.randomUUID()}`,
+	);
+	try {
+		for (const [identityPath, identity] of identities) {
+			await assertIdentity(identityPath, identity);
+		}
+		await rename(transactionDir, recoveryPath);
+		return recoveryPath;
+	} catch {
+		// The original unique transaction path remains the safest available evidence.
+		return transactionDir;
+	}
+}
+
+async function installScaffoldTransaction(args: {
+	autoresearchDir: string;
+	contents: [string, string, string];
+	destinationPaths: [string, string, string];
+	experimentId: string;
+	overwrite: boolean;
+	projectIdentity: PathIdentity;
+	projectPath: string;
+	spec: ExperimentSpec;
+}): Promise<{ cleanupRecoveryPath: string | null }> {
+	const projectIdentity = args.projectIdentity;
+	let transactionDir = "";
+	await guardedMutation(
+		"stage-mkdir",
+		args.projectPath,
+		[[args.projectPath, projectIdentity]],
+		async () => {
+			transactionDir = await mkdtemp(
+				join(args.projectPath, ".autoresearch-scaffold-"),
+			);
+		},
+	);
+	const transactionIdentity = identityOf(await stat(transactionDir));
+	const stageDir = join(transactionDir, "stage");
+	const backupDir = join(transactionDir, "backup");
+	const stagedPaths = args.destinationPaths.map((path) =>
+		join(stageDir, path.split(sep).at(-1) ?? ""),
+	) as [string, string, string];
+	const backups = new Map<string, string>();
+	const installed = new Set<string>();
+	let createdAutoresearchDir = false;
+	let scaffoldIdentity: PathIdentity | null = null;
+	let stageIdentity: PathIdentity;
+	let backupIdentity: PathIdentity = transactionIdentity;
+
+	try {
+		await guardedMutation(
+			"stage-mkdir",
+			stageDir,
+			[
+				[args.projectPath, projectIdentity],
+				[transactionDir, transactionIdentity],
+			],
+			async () => mkdir(stageDir),
+		);
+		stageIdentity = identityOf(await stat(stageDir));
+		await guardedMutation(
+			"backup-mkdir",
+			backupDir,
+			[
+				[args.projectPath, projectIdentity],
+				[transactionDir, transactionIdentity],
+			],
+			async () => mkdir(backupDir),
+		);
+		backupIdentity = identityOf(await stat(backupDir));
+		for (let index = 0; index < stagedPaths.length; index++) {
+			const stagedPath = stagedPaths[index];
+			const content = args.contents[index];
+			if (!stagedPath || content === undefined || content.length === 0) {
+				throw new Error("Invalid empty scaffold staging entry");
+			}
+			await guardedMutation(
+				"stage-write",
+				stagedPath,
+				[
+					[args.projectPath, projectIdentity],
+					[transactionDir, transactionIdentity],
+					[stageDir, stageIdentity],
+				],
+				async () =>
+					writeFile(stagedPath, content, { encoding: "utf8", mode: 0o644 }),
+			);
+		}
+		await guardedMutation(
+			"stage-chmod",
+			stagedPaths[1],
+			[
+				[args.projectPath, projectIdentity],
+				[transactionDir, transactionIdentity],
+				[stageDir, stageIdentity],
+			],
+			async () => makeEvalExecutable(stagedPaths[1]),
+		);
+
+		await ensureSafeScaffoldDirectory(args.autoresearchDir);
+		await ensureScaffoldFilesWritable(args.destinationPaths, args.overwrite);
+		const existingDirectory = await lstatOrNull(args.autoresearchDir);
+		if (existingDirectory === null) {
+			await guardedMutation(
+				"scaffold-mkdir",
+				args.autoresearchDir,
+				[[args.projectPath, projectIdentity]],
+				async () => mkdir(args.autoresearchDir),
+			);
+			createdAutoresearchDir = true;
+			scaffoldIdentity = identityOf(await stat(args.autoresearchDir));
+		} else {
+			scaffoldIdentity = identityOf(existingDirectory);
+		}
+
+		const [transactionStat, destinationStat] = await Promise.all([
+			stat(transactionDir),
+			stat(args.autoresearchDir),
+		]);
+		if (transactionStat.dev !== destinationStat.dev) {
+			throw new Error(
+				"Scaffold staging and destination must be on the same filesystem",
+			);
+		}
+
+		for (const destinationPath of args.destinationPaths) {
+			const destinationStat = await lstatOrNull(destinationPath);
+			if (destinationStat === null) continue;
+			if (!args.overwrite || !destinationStat.isFile()) {
+				throw new Error(
+					joinText("Unsafe scaffold overwrite destination: ", destinationPath),
+				);
+			}
+			const backupPath = join(
+				backupDir,
+				destinationPath.split(sep).at(-1) ?? "backup",
+			);
+			await guardedMutation(
+				"backup-rename",
+				destinationPath,
+				[
+					[args.projectPath, projectIdentity],
+					[args.autoresearchDir, scaffoldIdentity],
+					[transactionDir, transactionIdentity],
+					[backupDir, backupIdentity],
+				],
+				async () => rename(destinationPath, backupPath),
+			);
+			backups.set(destinationPath, backupPath);
+		}
+
+		for (let index = 0; index < stagedPaths.length; index++) {
+			const stagedPath = stagedPaths[index];
+			const destinationPath = args.destinationPaths[index];
+			if (!stagedPath || !destinationPath) {
+				throw new Error("Invalid scaffold installation entry");
+			}
+			if ((await lstatOrNull(destinationPath)) !== null) {
+				throw new Error(
+					joinText(
+						"Scaffold destination changed during install: ",
+						destinationPath,
+					),
+				);
+			}
+			await guardedMutation(
+				"install-rename",
+				destinationPath,
+				[
+					[args.projectPath, projectIdentity],
+					[args.autoresearchDir, scaffoldIdentity],
+					[transactionDir, transactionIdentity],
+					[stageDir, stageIdentity],
+				],
+				async () => rename(stagedPath, destinationPath),
+			);
+			installed.add(destinationPath);
+		}
+
+		await scaffoldFaultInjector?.("db-register", args.projectPath);
+		await assertIdentity(args.projectPath, projectIdentity);
+		await assertIdentity(args.autoresearchDir, scaffoldIdentity);
+		createExperiment({
+			id: args.experimentId,
+			spec: args.spec,
+			project_path: args.projectPath,
+			project_name: getProjectName(args.projectPath),
+			status: "scaffolded",
+		});
+	} catch (error) {
+		const rollbackErrors: string[] = [];
+		for (const destinationPath of [...installed].reverse()) {
+			try {
+				await guardedMutation(
+					"rollback-remove-installed",
+					destinationPath,
+					[
+						[args.projectPath, projectIdentity],
+						[args.autoresearchDir, scaffoldIdentity as PathIdentity],
+						[transactionDir, transactionIdentity],
+						[backupDir, backupIdentity],
+					],
+					async () => rm(destinationPath, { force: true }),
+				);
+			} catch (rollbackError) {
+				rollbackErrors.push(String(rollbackError));
+			}
+		}
+		for (const [destinationPath, backupPath] of [...backups].reverse()) {
+			try {
+				await guardedMutation(
+					"rollback-restore-backup",
+					backupPath,
+					[
+						[args.projectPath, projectIdentity],
+						[args.autoresearchDir, scaffoldIdentity as PathIdentity],
+						[transactionDir, transactionIdentity],
+						[backupDir, backupIdentity],
+					],
+					async () => rename(backupPath, destinationPath),
+				);
+			} catch (rollbackError) {
+				rollbackErrors.push(String(rollbackError));
+			}
+		}
+		if (createdAutoresearchDir) {
+			try {
+				await guardedMutation(
+					"rollback-remove-directory",
+					args.autoresearchDir,
+					[
+						[args.projectPath, projectIdentity],
+						[args.autoresearchDir, scaffoldIdentity as PathIdentity],
+					],
+					async () => rmdir(args.autoresearchDir),
+				);
+			} catch (rollbackError) {
+				rollbackErrors.push(String(rollbackError));
+			}
+		}
+		if (rollbackErrors.length > 0) {
+			throw new Error(
+				joinText(
+					error instanceof Error ? error.message : String(error),
+					"; rollback failed: ",
+					rollbackErrors.join("; "),
+					"; recovery backups preserved at: ",
+					backupDir,
+				),
+			);
+		}
+		await cleanupTransaction(transactionDir, [
+			[args.projectPath, projectIdentity],
+			[transactionDir, transactionIdentity],
+		]);
+		throw error;
+	}
+
+	const cleanupRecoveryPath = await cleanupTransaction(transactionDir, [
+		[args.projectPath, projectIdentity],
+		[transactionDir, transactionIdentity],
+	]);
+	return { cleanupRecoveryPath };
+}
+
+async function lstatOrNull(
+	path: string,
+): Promise<Awaited<ReturnType<typeof lstat>> | null> {
+	try {
+		return await lstat(path);
+	} catch (error) {
+		if (isNotFoundError(error)) return null;
+		throw error;
+	}
+}
+
 export async function ensureScaffoldFilesWritable(
 	paths: string[],
 	overwrite: boolean,
@@ -506,6 +1079,11 @@ export async function ensureScaffoldFilesWritable(
 			if (stat.isSymbolicLink()) {
 				throw new Error(
 					joinText("Refusing to write scaffold file through symlink: ", path),
+				);
+			}
+			if (!stat.isFile()) {
+				throw new Error(
+					joinText("Scaffold destination is not a regular file: ", path),
 				);
 			}
 
@@ -528,7 +1106,8 @@ export async function ensureScaffoldFilesWritable(
 			if (
 				error instanceof Error &&
 				(error.message.includes("already exists") ||
-					error.message.includes("through symlink"))
+					error.message.includes("through symlink") ||
+					error.message.includes("not a regular file"))
 			) {
 				throw error;
 			}
@@ -568,6 +1147,14 @@ function isNotFoundError(error: unknown): boolean {
 		error instanceof Error &&
 		"code" in error &&
 		(error as { code?: unknown }).code === "ENOENT"
+	);
+}
+
+function isAlreadyExistsError(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		"code" in error &&
+		(error as { code?: unknown }).code === "EEXIST"
 	);
 }
 
@@ -638,10 +1225,10 @@ function getStrategyHints(recipe: CatalogItem): string[] {
 	return hints;
 }
 
-function resolveTargetArtifact(
+async function resolveTargetArtifact(
 	projectPath: string,
 	targetFile?: string,
-): string | null {
+): Promise<string | null> {
 	const resolvedProject = resolve(projectPath);
 
 	if (!targetFile) {
@@ -655,6 +1242,23 @@ function resolveTargetArtifact(
 		!resolvedTarget.startsWith(joinText(resolvedProject, sep))
 	) {
 		return null;
+	}
+
+	let candidate = resolvedTarget;
+	while (candidate !== resolvedProject) {
+		try {
+			const canonicalCandidate = await realpath(candidate);
+			if (
+				canonicalCandidate !== resolvedProject &&
+				!canonicalCandidate.startsWith(joinText(resolvedProject, sep))
+			) {
+				return null;
+			}
+			break;
+		} catch (error) {
+			if (!isNotFoundError(error)) throw error;
+			candidate = resolve(candidate, "..");
+		}
 	}
 
 	return resolvedTarget;

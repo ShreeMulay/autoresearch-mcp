@@ -8,6 +8,9 @@ This is the most customizable ratchet template.
 Use it when the domain does not cleanly fit prompt editing, code optimization, config tuning, or content revision.
 Adapt the loop to the artifact and evaluator you have.
 
+## Data Safety
+Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, clinical records, secrets, PHI-bearing prompts or model responses, or production datasets to the server, evaluator, review tooling, logs, fixtures, or CI.
+
 ## Target
 - Primary artifact: [describe the thing being improved]
 - Supporting artifacts: [optional helper files, datasets, notes, or scripts]

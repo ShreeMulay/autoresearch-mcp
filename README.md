@@ -12,21 +12,29 @@ In Karpathy's framing, that can mean roughly 12 experiments per hour and around 
 
 This project is inspired by Karpathy's work, but it is not affiliated with his project and no code was copied.
 
+## Data Safety
+
+Use synthetic, non-sensitive data only; examples and tests use synthetic data only. Do not supply PHI, patient identifiers, PHI-bearing prompts or model responses, clinical records, secrets, or production datasets to this MCP server, its evaluators or review tooling, logs, fixtures, or CI.
+
+## Release Status
+
+Version 0.4.0 is not yet published. It remains pending integrity remediation and npm authentication, and no `v0.4.0` tag exists. The registry commands below are post-release instructions; until publication, use a reviewed source checkout rather than assuming `autoresearch-mcp` is available from npm.
+
 ## Quick Start
 
 Runtime requirements:
 
-- MCP server (`autoresearch-mcp`): requires [Bun](https://bun.sh), because the server uses `bun:sqlite`
-- Skill installer (`autoresearch-install-skill`): requires Node.js >= 20.19, no Bun needed
+- MCP server (`autoresearch-mcp`): requires [Bun](https://bun.sh) >= 1.3.10, because the server uses `bun:sqlite`
+- Standalone skill installer (`autoresearch-install-skill`): supports Node.js 22 and 24, no Bun needed
 - Any MCP-compatible client such as Claude Code or OpenCode
 
-Install globally (puts both commands on your PATH):
+After 0.4.0 is published, install globally (puts both commands on your PATH):
 
 ```bash
 npm install -g autoresearch-mcp
 ```
 
-Or run without a global install:
+Or, after publication, run without a global install:
 
 ```bash
 # Start the MCP server (requires Bun)
@@ -36,7 +44,7 @@ bunx autoresearch-mcp
 npx -p autoresearch-mcp autoresearch-install-skill
 ```
 
-Note: `npm install -g` succeeds on a machine without Bun, but the `autoresearch-mcp` server command will not run until Bun is installed. The skill installer runs on Node alone.
+Note: `npm install -g` succeeds on a machine without Bun, but the `autoresearch-mcp` server command will not run until Bun >= 1.3.10 is installed. The standalone skill installer runs on supported Node.js 22 or 24 alone.
 
 ### Install as Skill (Recommended)
 
@@ -230,11 +238,14 @@ If you prefer explicit tool orchestration, the lifecycle looks like this:
 1. suggest_technique(problem="reduce API latency without hurting quality")
 2. scaffold_experiment(recipe_id="code-performance", project_path="/repo", metric_name="requests/sec")
 3. update_experiment(experiment_id="...", status="running")
-4. log_result(iteration=1, score=1180, improved=true, change_description="inlined hot path")
-5. log_result(iteration=2, score=1165, improved=false, change_description="added extra serialization")
-6. get_experiment(experiment_id="...", include_results=true)
-7. log_technique_outcome(technique_id="code-performance", domain="backend", outcome="success")
+4. log_result(iteration=0, score=1100, is_baseline=true, improved=false, change_description="baseline before candidate changes")
+5. log_result(iteration=1, score=1180, change_description="inlined hot path")
+6. log_result(iteration=2, score=1165, change_description="added extra serialization")
+7. get_experiment(experiment_id="...", include_results=true)
+8. log_technique_outcome(technique_id="code-performance", domain="backend", outcome="success")
 ```
+
+Log exactly one baseline before candidate iterations. Baselines are never improvements, so the explicit `improved=false` assertion matches the server-derived result. For candidates, omit `improved` as above and let the server derive it; if supplied, the assertion must match the server-derived result.
 
 After scaffolding, your agent gets a working starting point:
 
