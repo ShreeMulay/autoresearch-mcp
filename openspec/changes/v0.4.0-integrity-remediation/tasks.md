@@ -35,14 +35,14 @@
 
 - [x] Run full local gates and packed-package smoke.
 - [x] Obtain independent Oracle review and resolve findings.
-- [ ] Export Beads state and commit the complete change.
-- [ ] Push Forgejo branch, open PR, obtain approval, pass exact-head CI, and merge.
-- [ ] Verify post-merge main CI and mirror GitHub.
-- [ ] Reconcile the shared checkout and remove the clean worktree.
+- [x] Export Beads state and commit the complete change.
+- [x] Push Forgejo branches, open PRs, pass exact-head CI, merge through the documented admin protection workflow, and restore protection.
+- [x] Verify post-merge main CI and mirror GitHub.
+- [x] Reconcile the shared checkout and remove the clean worktree.
 
 ## Phase 6 — Registry Closeout
 
-- [ ] Obtain explicit operator authorization for irreversible npm publication.
+- [x] Obtain explicit operator authorization for irreversible npm publication.
 - [ ] Authenticate to npm if operator credentials are available.
 - [ ] Publish and perform clean registry smoke.
 - [ ] Tag verified merged commit `v0.4.0` on Forgejo and GitHub.
