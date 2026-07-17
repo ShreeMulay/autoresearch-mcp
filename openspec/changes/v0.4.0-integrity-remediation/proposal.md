@@ -1,6 +1,6 @@
 # Change: v0.4.0 Integrity Remediation
 
-## Status: APPROVED FOR IMPLEMENTATION
+## Status: IMPLEMENTED — REGISTRY CLOSEOUT PENDING
 
 ## Bead
 
@@ -8,7 +8,7 @@
 
 ## Why
 
-The 2026-07-16 comprehensive release review overturned the earlier release-ready verdict. The package remains unpublished and must not be tagged or published while curated evaluators can report constant successful scores, the primary CLI can mask installer failures, packaged guidance encourages unsafe patient-record automation, scaffolded safety controls are dropped, experiment champion state trusts caller assertions, catalog loading is fail-open, and protected primary CI does not test the packed artifact.
+The 2026-07-16 comprehensive release review overturned the earlier release-ready verdict. The identified evaluator, CLI, packed-guidance, scaffold-control, result-integrity, catalog-loading, dependency/runtime, and protected packed-CI defects have been remediated and landed. The package remains unpublished and untagged while npm authentication and deterministic registry closeout are pending.
 
 ## Scope
 

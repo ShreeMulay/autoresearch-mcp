@@ -1,6 +1,6 @@
 # Change: v0.4.0 Pre-Publish Hardening
 
-## Status: IMPLEMENTED LEGACY SCOPE - RELEASE BLOCKED BY INTEGRITY REMEDIATION AND NPM AUTH
+## Status: IMPLEMENTED LEGACY SCOPE — REGISTRY CLOSEOUT PENDING
 
 ## Why
 
@@ -9,11 +9,11 @@ A full post-merge codebase review (oracle, 2026-06-12) found one security blocke
 ## Decisions
 
 - The YAML catalog is the authoritative source for recipe compositions; skill and reference docs are regenerated to match.
-- Server runtime requires Bun; the skill installer requires Node >= 20.19. Both are declared in `engines` and documented.
+- Server runtime requires Bun; the standalone skill installer supports Node.js 22 and 24. Both are declared in `engines` and documented.
 - First npm release will be `0.4.0` (0.3.0 was never published).
 - Follow-up backlog bead `autoresearch-mcp-46d` has been completed: budget/risk/constraints exposure, real zod-to-json-schema conversion, missing recipe templates, artifact inference reuse, tag normalization, E2E readiness polling, and Biome configuration are landed.
 - Final release hygiene before npm publish MUST remove all fake-score evaluator fallbacks, verify the package contents from a packed tarball, and archive completed OpenSpec changes.
-- A later comprehensive release review overturned the release-ready conclusion. Version 0.4.0 remains unpublished and untagged until the integrity-remediation change is complete and npm authentication is available.
+- A later comprehensive release review overturned the release-ready conclusion. Its integrity remediation and protected package/CI landing are now complete; version 0.4.0 remains unpublished and untagged pending npm authentication and deterministic registry closeout.
 
 ## What Changes
 
@@ -21,7 +21,7 @@ A full post-merge codebase review (oracle, 2026-06-12) found one security blocke
 
 - [x] A1: Sanitize all user-provided strings interpolated into generated `eval.sh` / `program.md` / `results.tsv` (strip newlines and control chars). Red test: multiline `metric_name` cannot inject a shell command line.
 - [x] A2: Regenerate `skills/autoresearch/SKILL.md` and `references/*` from the YAML catalog. Fix drifted compositions for code-performance, ml-training, content-revision, literature-synthesis, general-ratchet (plus test-amplification found drifted). Remove nonexistent `tree-search`. Tool mapping covers all 12 tools.
-- [x] A3: Runtime contract: `engines.node >= 20.19` added; README rewritten so server=Bun, installer=Node, and `bunx` is not described as a global install.
+- [x] A3: Runtime contract: `engines.node` supports Node.js 22 and 24; README distinguishes the Bun server from the Node-only installer and does not describe `bunx` as a global install.
 - [x] A4: Installer arg parsing is strict: unknown flags rejected (exit non-zero, no writes), `--target` requires a valid value, `--help` supported. Red tests for `--dryrun` typo and missing target value.
 
 ### Phase B - Majors
@@ -34,7 +34,7 @@ A full post-merge codebase review (oracle, 2026-06-12) found one security blocke
 - [x] B6: `suggest_technique` defaults to `general-ratchet` on zero-score ties and penalizes metric-dependent recipes when `has_scalar_metric` is false. Scoring covered by unit tests (`rankRecipes`).
 - [x] B7: Catalog loader errors loudly on duplicate IDs and YAML-vs-directory layer mismatch; bundled catalog loads with zero errors (regression-tested).
 - [x] B8: `log_result` gains optional `is_baseline`; `best_score` falls back to the baseline score when no improved iterations exist. Migration v3 adds the column.
-- [x] B9: CI: Bun pinned-min (1.3.10) + latest matrix; Node 20/22 job exercising the Node installer bin; tarball name derived from package.json; packed-install smoke asserts the MCP `tools/list` response includes the expected tools.
+- [x] B9: CI: Bun pinned-min (1.3.10) + latest matrix; Node.js 22/24 coverage exercises the standalone installer bin; tarball naming is derived from package.json; packed-install smoke asserts the MCP `tools/list` response includes the expected tools.
 - [x] B10: `get_server_info` reports the active database path actually opened, not a recomputed value.
 
 ### Release
@@ -42,13 +42,13 @@ A full post-merge codebase review (oracle, 2026-06-12) found one security blocke
 - [x] Version bumped to 0.4.0 in `package.json` and `src/version.ts`; CHANGELOG updated.
 - [x] `bun test` (101 pass / 0 fail), `bunx tsc --noEmit`, `bun run lint`, `bun run build` all pass.
 - [x] Packed tarball smoke passes for both public bins, including tools/list and serverInfo 0.4.0 assertions and unknown-flag rejection.
-- [x] PR #8 merged to `main` (squash `a971c0a`) with CI green on Bun 1.3.10, Bun latest, Node 20, Node 22.
-- [ ] npm publish `0.4.0` (`--access public`) and registry smoke verified. BLOCKED: requires interactive `bunx npm login` by the operator; tracked in Beads.
+- [x] PR #8 merged to `main` (squash `a971c0a`); subsequent protected CI/runtime reconciliation verifies Bun 1.3.10, Bun latest, Node.js 22, and Node.js 24.
+- [ ] Publish the verified `0.4.0` tarball and complete byte-verifying registry smoke. BLOCKED: requires operator npm authentication from approved external user-level config; tracked in Beads.
 - [x] Forgejo repo `thekidneyexperts/autoresearch-mcp` created (public), `main` pushed at `a971c0a`, branch protection restored (no direct push, 1 approval, woodpecker context), GitHub configured as push mirror with sync_on_commit.
 - [x] Woodpecker CI activated on Forgejo and `.woodpecker.yml` landed. Required status context corrected to `ci/woodpecker/pr/woodpecker`; Forgejo Actions disabled for this repo.
 - [x] Deferred review backlog landed via Forgejo PR #3 (`be1247d`): missing recipe templates, real zod-to-json-schema, budget/risk/constraints exposure, shared artifact inference, tag normalization, E2E readiness polling, and Biome config.
 - [x] Final release hygiene PR: remove/fail-close the remaining fake-score `get_template` fallback, add regression coverage, update CHANGELOG for PR #3/final fix, resolve AGENTS.md observability guidance, archive completed v0.3.0 OpenSpec, and run quality/package gates.
-- [ ] Complete the superseding v0.4.0 integrity remediation and obtain protected package/CI evidence before publication.
+- [x] Complete the superseding v0.4.0 integrity remediation and obtain protected package/CI evidence before publication.
 
 ## Close Criteria
 

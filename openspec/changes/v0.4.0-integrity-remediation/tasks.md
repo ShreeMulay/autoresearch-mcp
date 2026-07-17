@@ -44,6 +44,6 @@
 
 - [x] Obtain explicit operator authorization for irreversible npm publication.
 - [ ] Authenticate to npm if operator credentials are available.
-- [ ] Publish and perform clean registry smoke.
+- [ ] Publish the verified tarball and perform byte-verifying clean registry smoke.
 - [ ] Tag verified merged commit `v0.4.0` on Forgejo and GitHub.
 - [ ] Archive completed OpenSpecs and close Beads.

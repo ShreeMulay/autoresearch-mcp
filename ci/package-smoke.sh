@@ -6,7 +6,39 @@ readonly EXPECTED_NODE_VERSION="${EXPECTED_NODE_VERSION:-v22.22.1}"
 readonly EXPECTED_NPM_VERSION="${EXPECTED_NPM_VERSION:-10.9.4}"
 readonly REPO_ROOT="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 readonly EXPECTED_MANIFEST="$REPO_ROOT/ci/expected-package-manifest.txt"
-readonly WORK_DIR="$(mktemp -d)"
+readonly RELEASE_ARTIFACT="$REPO_ROOT/ci/release-artifact.json"
+ARTIFACT_OUTPUT=''
+
+while (($#)); do
+  case "$1" in
+    --artifact-output)
+      (($# >= 2)) || { printf 'package-smoke: --artifact-output requires an absolute directory\n' >&2; exit 64; }
+      ARTIFACT_OUTPUT=$2
+      shift 2
+      ;;
+    *) printf 'package-smoke: unknown argument: %s\n' "$1" >&2; exit 64 ;;
+  esac
+done
+
+if [[ -n "$ARTIFACT_OUTPUT" ]]; then
+  [[ "$ARTIFACT_OUTPUT" == /* ]] || { printf 'package-smoke: --artifact-output must be absolute\n' >&2; exit 64; }
+  mkdir -p "$ARTIFACT_OUTPUT"
+  ARTIFACT_OUTPUT="$(realpath "$ARTIFACT_OUTPUT")"
+fi
+WORK_DIR_RAW=''
+if ! WORK_DIR_RAW="$(mktemp -d)"; then
+  printf 'package-smoke: mktemp failed\n' >&2
+  exit 1
+fi
+[[ -n "$WORK_DIR_RAW" && "$WORK_DIR_RAW" == /* ]] || {
+  printf 'package-smoke: mktemp must return a nonempty absolute path\n' >&2
+  exit 1
+}
+readonly WORK_DIR="$(realpath "$WORK_DIR_RAW")"
+[[ "$WORK_DIR" != "$REPO_ROOT" && "$WORK_DIR" != "$REPO_ROOT"/* ]] || {
+  printf 'package-smoke: refusing checkout as sandbox\n' >&2
+  exit 1
+}
 readonly LOG_DIR="${PACKAGE_SMOKE_LOG_DIR:-$WORK_DIR/logs}"
 
 mkdir -p "$LOG_DIR"
@@ -71,6 +103,20 @@ readonly SHA512_FIRST="$(sha512sum "$FIRST_TGZ" | cut -d' ' -f1)"
 readonly SHA512_SECOND="$(sha512sum "$SECOND_TGZ" | cut -d' ' -f1)"
 [[ "$SHA256_FIRST" == "$SHA256_SECOND" ]] || fail "repeated npm pack SHA-256 mismatch"
 [[ "$SHA512_FIRST" == "$SHA512_SECOND" ]] || fail "repeated npm pack SHA-512 mismatch"
+node - "$RELEASE_ARTIFACT" "$SHA256_FIRST" "$SHA512_FIRST" "$PACKAGE_VERSION" <<'EOF'
+const fs = require("node:fs");
+const [path, sha256, sha512, version] = process.argv.slice(2);
+const value = JSON.parse(fs.readFileSync(path, "utf8"));
+const keys = ["integrity", "package", "publisher", "registry", "registryReads", "schemaVersion", "sha256", "sha512", "version"].sort();
+if (JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(keys)) throw new Error("release artifact has an open or incomplete schema");
+if (value.schemaVersion !== 1 || value.package !== "autoresearch-mcp" || value.version !== version || value.registry !== "https://registry.npmjs.org/" || value.publisher !== "shreemulay") throw new Error("release artifact identity mismatch");
+if (!/^[a-f0-9]{64}$/.test(value.sha256) || !/^[a-f0-9]{128}$/.test(value.sha512)) throw new Error("release artifact digest encoding mismatch");
+if (value.sha256 !== sha256 || value.sha512 !== sha512) throw new Error("packed artifact digest mismatch");
+if (value.integrity !== `sha512-${Buffer.from(sha512, "hex").toString("base64")}`) throw new Error("release artifact SRI mismatch");
+const reads = value.registryReads;
+const readKeys = ["attempts", "backoffSeconds"].sort();
+if (!reads || JSON.stringify(Object.keys(reads).sort()) !== JSON.stringify(readKeys) || !Number.isInteger(reads.attempts) || reads.attempts < 2 || reads.attempts > 5 || !Array.isArray(reads.backoffSeconds) || reads.backoffSeconds.length !== reads.attempts || reads.backoffSeconds.some((n) => !Number.isInteger(n) || n < 0 || n > 30)) throw new Error("invalid bounded registry-read policy");
+EOF
 printf 'artifact=%s sha256=%s sha512=%s\n' "$TARBALL" "$SHA256_FIRST" "$SHA512_FIRST"
 
 tar -tzf "$FIRST_TGZ" | LC_ALL=C sort > "$WORK_DIR/manifest.txt"
@@ -197,5 +243,12 @@ const serverInfo = JSON.parse(byId.get(3)?.result?.content?.[0]?.text ?? "null")
 if (serverInfo?.version !== version) throw new Error("get_server_info version mismatch");
 if (serverInfo?.catalog?.total !== 30) throw new Error(`catalog total mismatch: ${serverInfo?.catalog?.total}`);
 EOF
+
+if [[ -n "$ARTIFACT_OUTPUT" ]]; then
+  readonly VERIFIED_ARTIFACT="$ARTIFACT_OUTPUT/$TARBALL"
+  cp -- "$FIRST_TGZ" "$VERIFIED_ARTIFACT"
+  chmod 0444 "$VERIFIED_ARTIFACT"
+  printf 'verified_artifact=%s\n' "$VERIFIED_ARTIFACT"
+fi
 
 printf 'package-smoke=passed log=%s\n' "$LOG_FILE"

@@ -156,6 +156,36 @@ TypeScript conventions used in this project:
 - RORO: receive an object, return an object
 - small, composable functions over hidden side effects
 
+## Maintainer release runbook
+
+Release controls always use the canonical registry, `https://registry.npmjs.org/`. npm credentials must live only in an approved external user-level npm config outside the repository and worktree; never put credentials in arguments, repository files, artifacts, logs, CI, or review tooling.
+
+From the clean release commit, use the checked-in controller. Supply the exact, operation-specific confirmation requested by the controller through `RELEASE_CONFIRMATION`; confirmations are not reusable across operations. Use an absolute `RELEASE_EVIDENCE_PATH` outside the repository and worktree. `publish` performs registry smoke after reconciliation and writes evidence there. Standalone `smoke` is the non-mutating recovery and verification path: it captures the live release authority mirrored by Forgejo and GitHub, verifies the published bytes and installed runtime against that authority, and writes the same immutable evidence.
+
+```bash
+# Publish at most once; successful reconciliation includes smoke and evidence writing:
+RELEASE_EVIDENCE_PATH='/absolute/external/release-evidence.json' \
+  RELEASE_CONFIRMATION='<publish|package|version|registry|publisher|release-sha|artifact-sha256>' \
+  bun ci/release-control.ts publish
+
+# To capture live mirrored authority and write evidence without publishing:
+RELEASE_EVIDENCE_PATH='/absolute/external/release-evidence.json' \
+  bun ci/release-control.ts smoke
+
+# Only after a deterministic failure of published, byte-matching registry content:
+RELEASE_CONFIRMATION='<deprecate|publisher|package|version|registry|fixed-deprecation-message>' \
+  bun ci/release-control.ts deprecate
+RELEASE_CONFIRMATION='<clear-deprecation|publisher|package|version|registry|empty-message>' \
+  bun ci/release-control.ts clear-deprecation
+
+# Only after successful registry smoke, using its immutable external evidence:
+RELEASE_EVIDENCE_PATH='/absolute/external/release-evidence.json' \
+  RELEASE_CONFIRMATION='<tag|package|version|release-sha|evidence-sha256>' \
+  bun ci/release-control.ts tag
+```
+
+`publish` mutates only the verified absolute `.tgz`, never the working tree or `.`. An ambiguous publish result is reconciled with bounded read-only checks but is never automatically retried. Smoke never automatically republishes, deprecates, or tags. Deprecation and clearing it each require separate authorization; `npm unpublish` is prohibited. Tagging is annotated and Forgejo-first: Forgejo must verify exact before any GitHub tag push. Archive the active release OpenSpecs and close release Beads only after byte-verifying registry smoke and both remote tags are exact.
+
 ## Filing issues
 
 Bug reports should include:

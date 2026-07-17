@@ -51,7 +51,9 @@
     "start": "bun run src/index.ts",
     "test": "bun test",
     "test:package": "bash ci/package-smoke.sh",
-    "lint": "bunx biome check src/ tests/ scripts/ bin/",
+    "test:release": "bun test tests/package/release-closeout.test.ts",
+    "release:control": "bun ci/release-control.ts",
+    "lint": "bunx biome check src/ tests/ scripts/ bin/ ci/",
     "typecheck": "bunx tsc --noEmit",
     "load-catalog": "bun run src/db/load-catalog.ts"
   },
