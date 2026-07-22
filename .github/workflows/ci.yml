@@ -53,7 +53,7 @@ jobs:
         run: bash ci/package-smoke.sh
       - name: Preserve immutable smoke log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: package-smoke-log-${{ github.sha }}
           path: ${{ runner.temp }}/package-smoke-logs/
