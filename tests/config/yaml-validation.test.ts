@@ -89,15 +89,21 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 		);
 		const setup = String(job.steps[0]?.run);
 		expect(setup).toContain("apt-get update");
-		expect(setup).toContain("ca-certificates git");
+		expect(setup).toContain("ca-certificates");
+		expect(setup).toContain("git");
 		expect(setup).toContain("rm -rf /var/lib/apt/lists/*");
 		expect(setup).toContain("test -r /etc/ssl/certs/ca-certificates.crt");
 		expect(setup).toContain("git --version");
 		expect(setup).toContain("node --version");
 		if (jobName === "bun") {
-			expect(setup).toContain("git nodejs npm");
-			expect(setup).toContain("npm install --global npm@10.9.4");
-			expect(setup).toContain("hash -r");
+			expect(setup).toContain("ca-certificates curl git xz-utils");
+			expect(setup).toContain(
+				"https://nodejs.org/dist/v22.22.1/node-v22.22.1-linux-x64.tar.xz",
+			);
+			expect(setup).toContain(
+				"9a6bc82f9b491279147219f6a18add1e18424dce90d41d2a5fcd69d4924ba3aa",
+			);
+			expect(setup).toContain('test "$(node --version)" = v22.22.1');
 			expect(setup).toContain('test "$(npm --version)" = 10.9.4');
 		}
 		expect(job.steps[1]).toEqual({
