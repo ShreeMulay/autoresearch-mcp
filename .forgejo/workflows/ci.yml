@@ -18,11 +18,13 @@ jobs:
       - name: Verify pre-checkout runtime
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates git nodejs
+          apt-get install -y --no-install-recommends ca-certificates git nodejs npm
           rm -rf /var/lib/apt/lists/*
+          npm install --global npm@10.9.4
           test -r /etc/ssl/certs/ca-certificates.crt
           git --version
           node --version
+          test "$(npm --version)" = 10.9.4
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
