@@ -34,7 +34,7 @@ A full post-merge codebase review (oracle, 2026-06-12) found one security blocke
 - [x] B6: `suggest_technique` defaults to `general-ratchet` on zero-score ties and penalizes metric-dependent recipes when `has_scalar_metric` is false. Scoring covered by unit tests (`rankRecipes`).
 - [x] B7: Catalog loader errors loudly on duplicate IDs and YAML-vs-directory layer mismatch; bundled catalog loads with zero errors (regression-tested).
 - [x] B8: `log_result` gains optional `is_baseline`; `best_score` falls back to the baseline score when no improved iterations exist. Migration v3 adds the column.
-- [x] B9: CI: Bun pinned-min (1.3.10) + latest matrix; Node.js 22/24 coverage exercises the standalone installer bin; tarball naming is derived from package.json; packed-install smoke asserts the MCP `tools/list` response includes the expected tools.
+- [x] B9: CI: pinned Bun validation plus Node.js 22/24 coverage exercises the standalone installer bin; tarball naming is derived from package.json; packed-install smoke asserts the MCP `tools/list` response includes the expected tools.
 - [x] B10: `get_server_info` reports the active database path actually opened, not a recomputed value.
 
 ### Release
@@ -42,10 +42,10 @@ A full post-merge codebase review (oracle, 2026-06-12) found one security blocke
 - [x] Version bumped to 0.4.0 in `package.json` and `src/version.ts`; CHANGELOG updated.
 - [x] `bun test` (101 pass / 0 fail), `bunx tsc --noEmit`, `bun run lint`, `bun run build` all pass.
 - [x] Packed tarball smoke passes for both public bins, including tools/list and serverInfo 0.4.0 assertions and unknown-flag rejection.
-- [x] PR #8 merged to `main` (squash `a971c0a`); subsequent protected CI/runtime reconciliation verifies Bun 1.3.10, Bun latest, Node.js 22, and Node.js 24.
+- [x] PR #8 merged to `main` (squash `a971c0a`); subsequent protected CI/runtime reconciliation verified pinned Bun and Node.js 22/24 validation.
 - [ ] Publish the verified `0.4.0` tarball and complete byte-verifying registry smoke. BLOCKED: requires operator npm authentication from approved external user-level config; tracked in Beads.
-- [x] Forgejo repo `thekidneyexperts/autoresearch-mcp` created (public), `main` pushed at `a971c0a`, branch protection restored (no direct push, 1 approval, woodpecker context), GitHub configured as push mirror with sync_on_commit.
-- [x] Woodpecker CI activated on Forgejo and `.woodpecker.yml` landed. Required status context corrected to `ci/woodpecker/pr/woodpecker`; Forgejo Actions disabled for this repo.
+- [x] Forgejo repo `thekidneyexperts/autoresearch-mcp` created (public), `main` pushed at `a971c0a`, branch protection restored (no direct push, 1 approval), GitHub configured as push mirror with sync_on_commit.
+- [x] Active validation migrated from Woodpecker to PR-only `.forgejo/workflows/ci.yml`; the single required context is the terminal `ci` job, which requires the pinned Bun and Node.js 22/24 jobs.
 - [x] Deferred review backlog landed via Forgejo PR #3 (`be1247d`): missing recipe templates, real zod-to-json-schema, budget/risk/constraints exposure, shared artifact inference, tag normalization, E2E readiness polling, and Biome config.
 - [x] Final release hygiene PR: remove/fail-close the remaining fake-score `get_template` fallback, add regression coverage, update CHANGELOG for PR #3/final fix, resolve AGENTS.md observability guidance, archive completed v0.3.0 OpenSpec, and run quality/package gates.
 - [x] Complete the superseding v0.4.0 integrity remediation and obtain protected package/CI evidence before publication.
@@ -54,7 +54,7 @@ A full post-merge codebase review (oracle, 2026-06-12) found one security blocke
 
 This change can be archived only after all of the following are true:
 
-- Final release hygiene PR is merged through Forgejo with Woodpecker green.
+- Final release hygiene PR is merged through Forgejo with required Forgejo Actions CI green.
 - `bun test`, `bun run typecheck`, `bun run lint`, and `bun run build` pass on the release commit.
 - Packed-package audit/smoke proves runtime files are included and local DBs/secrets/worktree files are excluded.
 - `autoresearch-mcp@0.4.0` is published to npm.

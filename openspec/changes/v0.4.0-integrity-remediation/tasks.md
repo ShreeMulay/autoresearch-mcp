@@ -28,7 +28,7 @@
 
 ## Phase 4 — Primary CI and Documentation
 
-- [x] Add packed-artifact smoke to Woodpecker.
+- [x] Add packed-artifact smoke to protected Forgejo Actions CI.
 - [x] Reconcile README, changelog, project state, OpenSpec, and package metadata.
 
 ## Phase 5 — Verification and Landing

@@ -2,7 +2,7 @@
 
 ## Authority Model
 
-`ci/release-artifact.json` is the merged-main expected-identity record. It is schema-closed, excluded from the package, and contains stable package/version/registry/publisher identity, complete SHA-256/SHA-512 digests, SHA-512 SRI, and bounded registry-read policy. It is not self-authenticating: protected Woodpecker CI for the exact merged SHA must reconstruct the tarball, match all identity fields, and pass package contracts.
+`ci/release-artifact.json` is the merged-main expected-identity record. It is schema-closed, excluded from the package, and contains stable package/version/registry/publisher identity, complete SHA-256/SHA-512 digests, SHA-512 SRI, and bounded registry-read policy. It is not self-authenticating: protected Forgejo Actions CI for the exact merged SHA must reconstruct the tarball, match all identity fields, and pass package contracts.
 
 The release commit is resolved at execution time. The workflow queries live Forgejo/GitHub refs immediately before mutation, captures `RELEASE_SHA`, and requires a clean checkout where `HEAD` and both live `main` refs equal it. It also proves both live `v0.4.0` tags are absent. The verified tarball must match the checked-in identity. The captured commit becomes the only possible tag target after registry smoke; any later main advancement prevents automatic tag closeout and requires reconciliation against the captured SHA.
 
