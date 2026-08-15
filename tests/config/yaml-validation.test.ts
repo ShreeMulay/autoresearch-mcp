@@ -103,9 +103,14 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 	}
 
 	const allCommands = workflowSource;
-	expect(workflow.jobs.package_smoke.needs).toEqual(["bun", "node22", "node24"]);
+	expect(workflow.jobs.package_smoke.needs).toEqual([
+		"bun",
+		"node22",
+		"node24",
+	]);
 	const packageSetup = String(
-		(workflow.jobs.package_smoke.steps as Array<Record<string, unknown>>)[0]?.run,
+		(workflow.jobs.package_smoke.steps as Array<Record<string, unknown>>)[0]
+			?.run,
 	);
 	for (const diagnostic of ["df -h .", "df -i .", "ls -A ."]) {
 		expect(packageSetup).toContain(diagnostic);
