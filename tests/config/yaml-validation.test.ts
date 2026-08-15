@@ -85,9 +85,14 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 		expect(job.container.image).toBe(
 			jobName === "package" ? images.node22 : images[jobName],
 		);
-		expect(job.steps[0]?.run).toBe(
-			"test -r /etc/ssl/certs/ca-certificates.crt && git --version && node --version",
-		);
+		const setup = String(job.steps[0]?.run);
+		expect(setup).toContain("apt-get update");
+		expect(setup).toContain("ca-certificates git");
+		expect(setup).toContain("rm -rf /var/lib/apt/lists/*");
+		expect(setup).toContain("test -r /etc/ssl/certs/ca-certificates.crt");
+		expect(setup).toContain("git --version");
+		expect(setup).toContain("node --version");
+		if (jobName === "bun") expect(setup).toContain("git nodejs");
 		expect(job.steps[1]).toEqual({
 			name: "Checkout",
 			uses: checkout,
@@ -141,15 +146,8 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 	expect(terminal.needs).toEqual(["bun", "node22", "node24", "package"]);
 	expect(terminal.if).toBe("always()");
 	expect(terminal.container.image).toBe(images.bun);
-	expect(terminal.steps[0]?.run).toBe(
-		"test -r /etc/ssl/certs/ca-certificates.crt && git --version && node --version",
-	);
-	expect(terminal.steps[1]).toEqual({
-		name: "Checkout",
-		uses: checkout,
-		with: { "persist-credentials": false },
-	});
-	const terminalRun = String(terminal.steps[2]?.run);
+	expect(terminal.steps).toHaveLength(1);
+	const terminalRun = String(terminal.steps[0]?.run);
 	for (const dependency of ["bun", "node22", "node24", "package"]) {
 		expect(terminalRun).toContain(`needs.${dependency}.result`);
 		expect(terminalRun).toContain("success");
