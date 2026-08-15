@@ -28,7 +28,7 @@ MCP server for autoresearch technique discovery, experiment scaffolding, trackin
 
 ## Validation CI
 - `.forgejo/workflows/ci.yml` is the active PR-only validation workflow.
-- Branch protection requires only its terminal `ci` job; that job fails unless the `bun`, `node22`, `node24`, and canonical `package` jobs all succeed.
+- Branch protection requires only its terminal `ci` job; that job fails unless the `bun`, `node22`, `node24`, and canonical `package_smoke` jobs all succeed.
 - Do not reintroduce Woodpecker validation or add push, default-branch, manual, publication, deployment, secret-bearing, or provider-calling triggers to this workflow.
 
 ## Phase Plan

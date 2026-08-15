@@ -8,9 +8,13 @@ The release commit is resolved at execution time. The workflow queries live Forg
 
 ## Artifact Reconstruction
 
-`ci/package-smoke.sh` remains the canonical reconstruction and local package proof under Bun 1.3.10, Node 22.22.1, and npm 10.9.4. It double-packs outside the checkout, proves byte identity, validates the exact manifest and dependency floors, then runs installed-package contracts.
+`ci/package-smoke.sh` remains the canonical reconstruction and local package proof under Bun 1.3.10, Node 22.22.1, and npm 10.9.4. Before packing, it reads the stage-0 index with `git ls-files --stage -z` and copies the current working-tree bytes for tracked regular files into an external staging tree. Git mode `100755` becomes `0755`, other tracked regular files become `0644`, and created directories become `0755`. This removes checkout umask and source-mode variation without substituting committed blob content for current tracked working-tree content.
+
+Staging is NUL-safe and fail closed: malformed index records, unsafe paths, duplicate/conflicting or non-stage-0 entries, missing files, symlinks, and special files abort reconstruction. The staging tree contains neither `.git` nor untracked files, dependency directories, logs, or secret-bearing checkout residue. Both `npm pack` invocations target this same canonical tree; the script then proves byte identity, validates the exact manifest and dependency floors, and runs installed-package contracts.
 
 The script additionally validates every closed-schema field in `ci/release-artifact.json`. An optional artifact-output directory receives a copy only after every package-smoke assertion succeeds. Failed smoke leaves no release candidate.
+
+The remote digest mismatch was traced to `npm pack` preserving pre-existing source permission bits: restrictive local/clone modes and ordinary Forgejo checkout modes yielded different archives even with the pinned toolchain, and `npm_config_umask=0022` did not normalize existing files. Canonical staging addresses that cause. No remote-green result is claimed until exact-head Forgejo CI succeeds.
 
 ## Publication Boundary
 

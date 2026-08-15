@@ -14,6 +14,8 @@
 - [x] Regenerate the deterministic package fixture and final release-artifact digests/SRI.
 - [x] Add one always-running terminal `ci` dependency gate.
 - [x] Reconcile active current-facing contributor and v0.4.0 OpenSpec references.
+- [x] Canonicalize tracked source modes in an external staging tree before both package reconstructions.
+- [x] Add a regression proving restrictive and ordinary source-mode layouts produce byte-identical archives.
 
 ## Verification
 
@@ -28,8 +30,9 @@
 - Focused RED: 1 pass / 2 fail before dependency and package-job implementation.
 - Focused GREEN: 3 pass / 0 fail; full suite: 272 pass / 0 fail.
 - Bun 1.3.14 frozen install, audit, typecheck, lint, and build pass; audit reports no vulnerabilities.
-- Canonical package smoke passes under Bun 1.3.10, Node 22.22.1, and npm 10.9.4; packed consumer audit reports zero vulnerabilities and all six floors pass.
-- Two canonical packs and the checked-in fixture are byte-identical: SHA-256 `5b97755d09f460b384fcf7d3f816850c532465ad48c8c0c066c5f943a2481235`; SHA-512 `3e248adf6ab0074c7e9df6069f842df849d7ba8e8463794f1d7afa3550ce31eac29a943c6bccc7cadbb4cb80a2d6e21c6057d1b0d11380d06d39ba283ab3218f`.
+- The normalized canonical package smoke passes locally under Bun 1.3.14, Node 22.22.2, and npm 10.9.4; packed consumer audit reports zero vulnerabilities and all six floors pass. Exact Bun 1.3.10/Node 22.22.1 verification remains pending because the local Docker daemon is inaccessible.
+- Two canonical packs and the checked-in fixture are byte-identical after mode normalization: SHA-256 `1d5c26068f12be753ff2b51e9933a808cee11e2fbd46ae7e79454addf56c64e6`; SHA-512 `8f135a0a7c1c2a3b82db038d4b9ab1efde8501f720c6998431552f5d23517cdea4ec28dc0384bf5b1a1f197c67e18fcfed1cc9c5e4af0be268938b6f675e21fd`.
 - Node 22.22.1 and Node 24.19.0 installer contracts pass, including dry-run, help, invalid option/target, no-write, and cleanup assertions.
 - Canonical workflow lint passes. OpenSpec CLI validation remains unavailable locally because `openspec` is not installed.
-- Remote runs on the original `package` job identity failed during checkout finalization before package commands. The renamed `package_smoke` job pins the exact Node 22.22.1 image and emits pre-checkout capacity/workspace diagnostics; exact-head remote verification remains required.
+- Focused mode-layout RED failed because npm archived the checkout's existing `0600`/`0700` versus `0644`/`0755` source modes; setting npm's umask did not rewrite those modes. Focused GREEN stages current tracked file bytes with Git's `100755` bit mapped to `0755`, all other regular files to `0644`, and directories to `0755`.
+- The latest diagnosed remote `package_smoke` failure used the pinned Bun 1.3.10, Node 22.22.1, and npm 10.9.4 toolchain but reconstructed different bytes from the restrictive local fixture because runner checkout modes were ordinary. This diagnosis does not establish a remote green run; exact-head remote verification remains required.

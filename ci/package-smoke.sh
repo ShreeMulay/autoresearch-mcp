@@ -87,10 +87,96 @@ readonly NPM_VERSION="$(npm --version)"
 printf 'commit=%s\n' "$COMMIT_SHA"
 printf 'bun=%s node=%s npm=%s\n' "$BUN_VERSION" "$NODE_VERSION" "$NPM_VERSION"
 
+readonly STAGED_ROOT="$WORK_DIR/source"
+readonly STAGE_HELPER="$WORK_DIR/stage-tracked.cjs"
+cat > "$STAGE_HELPER" <<'EOF'
+"use strict";
+const fs = require("node:fs");
+
+const [sourceRoot, destinationRoot] = process.argv.slice(2);
+if (!sourceRoot || !destinationRoot) throw new Error("source and destination roots are required");
+const input = fs.readFileSync(0);
+if (input.length === 0 || input[input.length - 1] !== 0) throw new Error("malformed git index stream");
+if (input.indexOf(Buffer.from([0, 0])) !== -1) throw new Error("malformed empty git index record");
+
+const slash = Buffer.from("/");
+const sourcePrefix = Buffer.from(`${sourceRoot}/`);
+const destinationPrefix = Buffer.from(`${destinationRoot}/`);
+const seen = new Set();
+let count = 0;
+
+fs.mkdirSync(destinationRoot, { recursive: false, mode: 0o755 });
+fs.chmodSync(destinationRoot, 0o755);
+
+for (let offset = 0; offset < input.length - 1;) {
+	const end = input.indexOf(0, offset);
+	if (end < 0 || end === offset) throw new Error("malformed empty git index record");
+	const record = input.subarray(offset, end);
+	offset = end + 1;
+	const tab = record.indexOf(9);
+	if (tab <= 0 || record.indexOf(9, tab + 1) !== -1) throw new Error("malformed git index record");
+	const header = record.subarray(0, tab).toString("ascii");
+	const match = /^(\d{6}) ([0-9a-f]{40}|[0-9a-f]{64}) ([0-3])$/.exec(header);
+	if (!match) throw new Error("malformed git index metadata");
+	const [, gitMode, , stage] = match;
+	if (stage !== "0") throw new Error("non-stage-0 git index entry");
+	if (gitMode !== "100644" && gitMode !== "100755") throw new Error(`tracked entry is not a regular file: mode ${gitMode}`);
+
+	const path = record.subarray(tab + 1);
+	const components = [];
+	let componentStart = 0;
+	for (let index = 0; index <= path.length; index++) {
+		if (index !== path.length && path[index] !== 47) continue;
+		const component = path.subarray(componentStart, index);
+		if (component.length === 0 || component.equals(Buffer.from(".")) || component.equals(Buffer.from(".."))) throw new Error("unsafe tracked path");
+		if (component.equals(Buffer.from(".git"))) throw new Error("tracked path enters .git");
+		components.push(component);
+		componentStart = index + 1;
+	}
+	const key = path.toString("hex");
+	if (seen.has(key)) throw new Error("duplicate or conflicting git index entry");
+	seen.add(key);
+
+	let sourceParent = Buffer.from(sourceRoot);
+	let destinationParent = Buffer.from(destinationRoot);
+	for (const component of components.slice(0, -1)) {
+		sourceParent = Buffer.concat([sourceParent, slash, component]);
+		const sourceParentStat = fs.lstatSync(sourceParent);
+		if (!sourceParentStat.isDirectory() || sourceParentStat.isSymbolicLink()) throw new Error("tracked path parent is not a real directory");
+		destinationParent = Buffer.concat([destinationParent, slash, component]);
+		try {
+			fs.mkdirSync(destinationParent, { mode: 0o755 });
+		} catch (error) {
+			if (error.code !== "EEXIST") throw error;
+			const destinationParentStat = fs.lstatSync(destinationParent);
+			if (!destinationParentStat.isDirectory() || destinationParentStat.isSymbolicLink()) throw new Error("staged path parent is not a real directory");
+		}
+		fs.chmodSync(destinationParent, 0o755);
+	}
+
+	const source = Buffer.concat([sourcePrefix, path]);
+	const destination = Buffer.concat([destinationPrefix, path]);
+	const descriptor = fs.openSync(source, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+	try {
+		const sourceStat = fs.fstatSync(descriptor);
+		if (!sourceStat.isFile()) throw new Error("tracked path is not a regular file");
+		fs.writeFileSync(destination, fs.readFileSync(descriptor), { flag: "wx", mode: gitMode === "100755" ? 0o755 : 0o644 });
+	} finally {
+		fs.closeSync(descriptor);
+	}
+	fs.chmodSync(destination, gitMode === "100755" ? 0o755 : 0o644);
+	count++;
+}
+if (count === 0) throw new Error("git index contains no tracked regular files");
+process.stdout.write(`staged_tracked_files=${count}\n`);
+EOF
+
+git -C "$REPO_ROOT" ls-files --stage -z | node "$STAGE_HELPER" "$REPO_ROOT" "$STAGED_ROOT" || fail "canonical tracked-file staging failed"
+
 mkdir -p "$WORK_DIR/pack-1" "$WORK_DIR/pack-2" "$WORK_DIR/home"
 for destination in "$WORK_DIR/pack-1" "$WORK_DIR/pack-2"; do
   env -i HOME="$WORK_DIR/home" PATH="$PATH" npm_config_userconfig=/dev/null npm_config_update_notifier=false \
-    npm pack "$REPO_ROOT" --pack-destination "$destination" --ignore-scripts --loglevel error >/dev/null
+    npm pack "$STAGED_ROOT" --pack-destination "$destination" --ignore-scripts --loglevel error >/dev/null
 done
 
 readonly FIRST_TGZ="$WORK_DIR/pack-1/$TARBALL"

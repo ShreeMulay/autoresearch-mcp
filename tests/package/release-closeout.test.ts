@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 import {
 	chmod,
 	copyFile,
+	mkdir,
 	mkdtemp,
 	readFile,
 	rm,
@@ -17,7 +18,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "../..");
 const fixtureRoot = join(import.meta.dir, "fixtures");
@@ -69,6 +70,85 @@ async function logs() {
 
 async function resetLogs() {
 	await Promise.all([writeFile(npmLog, ""), writeFile(gitLog, "")]);
+}
+
+async function createPermissionLayout(
+	checkout: string,
+	layout: "ordinary" | "restrictive",
+) {
+	const result = Bun.spawnSync(["git", "ls-files", "--stage", "-z"], {
+		cwd: checkout,
+	});
+	if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+	const directories = new Set<string>();
+	for (const record of result.stdout.toString().split("\0")) {
+		if (!record) continue;
+		const match = /^(100644|100755) [a-f0-9]+ 0\t(.+)$/.exec(record);
+		if (!match) throw new Error(`unexpected tracked entry: ${record}`);
+		const [, mode, path] = match;
+		let parent = dirname(path);
+		while (parent !== ".") {
+			directories.add(parent);
+			parent = dirname(parent);
+		}
+		await chmod(
+			join(checkout, path),
+			layout === "restrictive"
+				? mode === "100755"
+					? 0o700
+					: 0o600
+				: mode === "100755"
+					? 0o755
+					: 0o644,
+		);
+	}
+	for (const directory of [...directories].sort(
+		(left, right) => left.split("/").length - right.split("/").length,
+	)) {
+		await chmod(
+			join(checkout, directory),
+			layout === "restrictive" ? 0o700 : 0o755,
+		);
+	}
+}
+
+async function packPermissionLayout(layout: "ordinary" | "restrictive") {
+	const checkout = join(sandbox, `package-${layout}`);
+	const output = join(sandbox, `artifact-${layout}`);
+	await Bun.$`git clone --quiet --no-hardlinks ${root} ${checkout}`;
+	await Promise.all([
+		copyFile(smokePath, join(checkout, "ci", "package-smoke.sh")),
+		copyFile(manifestPath, join(checkout, "ci", "release-artifact.json")),
+		mkdir(output),
+	]);
+	await createPermissionLayout(checkout, layout);
+	const proc = Bun.spawn(
+		[
+			"bash",
+			join(checkout, "ci", "package-smoke.sh"),
+			"--artifact-output",
+			output,
+		],
+		{
+			cwd: checkout,
+			env: {
+				...process.env,
+				EXPECTED_BUN_VERSION: Bun.version,
+				EXPECTED_NODE_VERSION: Bun.spawnSync(["node", "--version"])
+					.stdout.toString()
+					.trim(),
+			},
+			stdout: "pipe",
+			stderr: "pipe",
+		},
+	);
+	const [exitCode, stdout, stderr] = await Promise.all([
+		proc.exited,
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+	]);
+	if (exitCode !== 0) throw new Error(`${stdout}\n${stderr}`);
+	return readFile(join(output, "autoresearch-mcp-0.4.0.tgz"));
 }
 
 async function run(command: string, extra: Record<string, string> = {}) {
@@ -225,7 +305,17 @@ describe("closed release artifact", () => {
 			await Promise.all([
 				writeFile(
 					fakeGit,
-					"#!/bin/sh\nprintf '1111111111111111111111111111111111111111\\n'\n",
+					`#!/bin/sh
+if [ "\${3:-}" = rev-parse ]; then printf '1111111111111111111111111111111111111111\\n'; exit 0; fi
+if [ "\${3:-}" = ls-files ]; then
+  printf '100755 1111111111111111111111111111111111111111 0\\tci/package-smoke.sh\\0'
+  printf '100644 1111111111111111111111111111111111111111 0\\tci/release-artifact.json\\0'
+  printf '100644 1111111111111111111111111111111111111111 0\\tci/release-control.ts\\0'
+  printf '100644 1111111111111111111111111111111111111111 0\\tpackage.json\\0'
+  exit 0
+fi
+exit 64
+`,
 					{ mode: 0o755 },
 				),
 				writeFile(
@@ -233,6 +323,7 @@ describe("closed release artifact", () => {
 					`#!/bin/sh
 if [ "\${1:-}" = --version ]; then printf 'v22.22.1\\n'; exit 0; fi
 if [ "\${1:-}" = -p ] && [ "\${2:-}" = "require('${copiedRoot}/package.json').version" ]; then printf '0.4.0\\n'; exit 0; fi
+case "\${1:-}" in */stage-tracked.cjs) exec bun "$@" ;; esac
 if [ "\${1:-}" = - ]; then
   shift
   script="$(mktemp /tmp/release-node-shim.XXXXXX)" || exit $?
@@ -271,6 +362,17 @@ exit 64
 });
 
 describe("package smoke artifact export", () => {
+	it("produces byte-identical archives from restrictive and ordinary tracked-file modes", async () => {
+		const [restrictive, ordinary] = await Promise.all([
+			packPermissionLayout("restrictive"),
+			packPermissionLayout("ordinary"),
+		]);
+		expect(createHash("sha256").update(restrictive).digest("hex")).toBe(
+			createHash("sha256").update(ordinary).digest("hex"),
+		);
+		expect(restrictive).toEqual(ordinary);
+	});
+
 	it("rejects relative artifact output before creating a repository fallback", async () => {
 		const proc = Bun.spawn(
 			["bash", smokePath, "--artifact-output", "relative"],
