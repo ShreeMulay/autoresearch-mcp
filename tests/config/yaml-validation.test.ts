@@ -101,6 +101,7 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 	}
 
 	const allCommands = workflowSource;
+	expect(workflow.jobs.package.needs).toEqual(["bun", "node22", "node24"]);
 	for (const command of [
 		"bun install --frozen-lockfile",
 		"bun audit",

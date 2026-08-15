@@ -97,6 +97,7 @@ jobs:
           rm -rf "$SANDBOX"
 
   package:
+    needs: [bun, node22, node24]
     runs-on: forgejo-ci
     container:
       image: docker.io/library/node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436
