@@ -19,7 +19,7 @@ The 2026-07-16 comprehensive release review overturned the earlier release-ready
 - Derive result improvement and champion state server-side from metric direction and current state.
 - Validate the complete YAML catalog before applying one atomic database snapshot; abort startup on catalog errors.
 - Harden migration concurrency, experiment lifecycle transitions, scaffold writes, path handling, numeric bounds, and duration-aware recipe compatibility filtering.
-- Put packed-package inspection, installation, CLI failure checks, and MCP handshake in Woodpecker.
+- Put packed-package inspection, installation, CLI failure checks, and MCP handshake in protected Forgejo Actions CI.
 - Raise dependency security floors and make supported runtime claims match CI.
 - Reconcile README, changelog, OpenSpec, package metadata, and release state.
 
@@ -42,7 +42,7 @@ The 2026-07-16 comprehensive release review overturned the earlier release-ready
 - Invalid lifecycle transitions and incoherent numeric budgets are rejected.
 - Scaffold failure at every mutation boundary restores exact prior contents/modes and leaves no partial files, staging artifacts, or experiment row; concurrent scaffolds for one project are rejected or serialized.
 - Changing only a valid duration constraint can change recommendation ordering; malformed, zero, and negative durations are rejected.
-- Woodpecker tests the exact packed tarball from a clean sandbox and records tarball SHA-256 plus commit SHA.
+- Forgejo Actions CI tests the exact packed tarball from a clean sandbox and records tarball SHA-256 plus commit SHA.
 - Dependency floors are `@modelcontextprotocol/sdk >=1.29.0 <2`, `yaml >=2.8.3 <3`, `zod >=3.25.28 <4`, and exact `zod-to-json-schema 3.25.2`; Biome remains on major 1.
 - The packed tarball contains no workflow encouraging patient-record automation and explicitly prohibits PHI, patient identifiers, PHI-bearing prompts/model responses, secrets, and production datasets in the server, evaluators, review tooling, logs, fixtures, and CI.
 - Public documentation does not claim publication before registry verification.

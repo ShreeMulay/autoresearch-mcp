@@ -26,6 +26,11 @@ MCP server for autoresearch technique discovery, experiment scaffolding, trackin
 - Templates: organized by recipe in `catalog/templates/{recipe}/`
 - All experiment data models include cost tracking (tokens, dollars, wall time)
 
+## Validation CI
+- `.forgejo/workflows/ci.yml` is the active PR-only validation workflow.
+- Branch protection requires only its terminal `ci` job; that job fails unless the `bun`, `node22`, `node24`, and canonical `package_smoke` jobs all succeed.
+- Do not reintroduce Woodpecker validation or add push, default-branch, manual, publication, deployment, secret-bearing, or provider-calling triggers to this workflow.
+
 ## Phase Plan
 - Phase 0.5: Catalog only (3 discovery tools + Resources)
 - Phase 1: + Experiment tracking + scaffolding

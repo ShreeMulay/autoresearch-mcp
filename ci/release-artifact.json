@@ -4,9 +4,9 @@
 	"version": "0.4.0",
 	"registry": "https://registry.npmjs.org/",
 	"publisher": "shreemulay",
-	"sha256": "da86a2c03fe8ea13275a03f8ff2d97dff15ad2f49a3be537f2c087d4e318b621",
-	"sha512": "585ae0398ada79b5290a5952c6d04078b01ed9da303142b88b51c18f4c9b872d07c67b04c3c6c15c7824562da302f424f082bf8608509ff9e3577467f272de78",
-	"integrity": "sha512-WFrgOYraebUpCllSxtBAeLAe2dowMUK4i1HBj0ybhy0HxnsEw8bBXHgkVi2jAvQk8IK/hghQn/njV3Rn8nLeeA==",
+	"sha256": "1d5c26068f12be753ff2b51e9933a808cee11e2fbd46ae7e79454addf56c64e6",
+	"sha512": "8f135a0a7c1c2a3b82db038d4b9ab1efde8501f720c6998431552f5d23517cdea4ec28dc0384bf5b1a1f197c67e18fcfed1cc9c5e4af0be268938b6f675e21fd",
+	"integrity": "sha512-jxNaCnwcKjuC2wONS5qx796FAfcgxpmEMVUvXSNRfN6k7CjcA4S/WxofGXxn4Y/P7RzJxeSvC+Jok4tvZ14h/Q==",
 	"registryReads": {
 		"attempts": 3,
 		"backoffSeconds": [0, 1, 2]

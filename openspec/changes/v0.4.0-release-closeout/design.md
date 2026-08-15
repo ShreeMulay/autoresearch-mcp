@@ -2,15 +2,19 @@
 
 ## Authority Model
 
-`ci/release-artifact.json` is the merged-main expected-identity record. It is schema-closed, excluded from the package, and contains stable package/version/registry/publisher identity, complete SHA-256/SHA-512 digests, SHA-512 SRI, and bounded registry-read policy. It is not self-authenticating: protected Woodpecker CI for the exact merged SHA must reconstruct the tarball, match all identity fields, and pass package contracts.
+`ci/release-artifact.json` is the merged-main expected-identity record. It is schema-closed, excluded from the package, and contains stable package/version/registry/publisher identity, complete SHA-256/SHA-512 digests, SHA-512 SRI, and bounded registry-read policy. It is not self-authenticating: protected Forgejo Actions CI for the exact merged SHA must reconstruct the tarball, match all identity fields, and pass package contracts.
 
 The release commit is resolved at execution time. The workflow queries live Forgejo/GitHub refs immediately before mutation, captures `RELEASE_SHA`, and requires a clean checkout where `HEAD` and both live `main` refs equal it. It also proves both live `v0.4.0` tags are absent. The verified tarball must match the checked-in identity. The captured commit becomes the only possible tag target after registry smoke; any later main advancement prevents automatic tag closeout and requires reconciliation against the captured SHA.
 
 ## Artifact Reconstruction
 
-`ci/package-smoke.sh` remains the canonical reconstruction and local package proof under Bun 1.3.10, Node 22.22.1, and npm 10.9.4. It double-packs outside the checkout, proves byte identity, validates the exact manifest and dependency floors, then runs installed-package contracts.
+`ci/package-smoke.sh` remains the canonical reconstruction and local package proof under Bun 1.3.10, Node 22.22.1, and npm 10.9.4. Before packing, it reads the stage-0 index with `git ls-files --stage -z` and copies the current working-tree bytes for tracked regular files into an external staging tree. Git mode `100755` becomes `0755`, other tracked regular files become `0644`, and created directories become `0755`. This removes checkout umask and source-mode variation without substituting committed blob content for current tracked working-tree content.
+
+Staging is NUL-safe and fail closed: malformed index records, unsafe paths, duplicate/conflicting or non-stage-0 entries, missing files, symlinks, and special files abort reconstruction. The staging tree contains neither `.git` nor untracked files, dependency directories, logs, or secret-bearing checkout residue. Both `npm pack` invocations target this same canonical tree; the script then proves byte identity, validates the exact manifest and dependency floors, and runs installed-package contracts.
 
 The script additionally validates every closed-schema field in `ci/release-artifact.json`. An optional artifact-output directory receives a copy only after every package-smoke assertion succeeds. Failed smoke leaves no release candidate.
+
+The remote digest mismatch was traced to `npm pack` preserving pre-existing source permission bits: restrictive local/clone modes and ordinary Forgejo checkout modes yielded different archives even with the pinned toolchain, and `npm_config_umask=0022` did not normalize existing files. Canonical staging addresses that cause. No remote-green result is claimed until exact-head Forgejo CI succeeds.
 
 ## Publication Boundary
 

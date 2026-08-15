@@ -69,10 +69,11 @@
     "typescript": "^5.9.3"
   },
   "resolutions": {
-    "@hono/node-server": "1.19.13",
-    "fast-uri": "3.1.2",
-    "hono": "4.12.30",
-    "ip-address": "10.2.0",
+    "@hono/node-server": "1.19.15",
+    "body-parser": "2.3.0",
+    "fast-uri": "3.1.5",
+    "hono": "4.12.34",
+    "ip-address": "10.4.0",
     "qs": "6.15.3"
   },
   "engines": {
