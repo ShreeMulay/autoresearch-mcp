@@ -18,9 +18,9 @@ Active pull-request validation must move from Woodpecker to the repository's con
 - Grant only contents read permission and run every job on `forgejo-ci` in digest-pinned containers.
 - Run pinned checkout with credentials persistence disabled only after verifying the git and Node runtimes.
 - Preserve frozen Bun install, audit, typecheck, lint, tests, build, packed-package smoke, and Node 22/24 installer contracts.
-- Keep package smoke in a separate blocking `package` job under canonical Bun 1.3.10, Node 22.22.1, and npm 10.9.4; verify the exact toolchain before smoke.
+- Keep package smoke in a separate blocking `package_smoke` job under canonical Bun 1.3.10, Node 22.22.1, and npm 10.9.4; verify the exact toolchain before smoke.
 - Enforce compatible transitive dependency floors in the lock and packed-consumer graph. The diagnosed `fast-uri` floor remains 3.1.3, while the root resolution is 3.1.5 because the current audit database reports 3.1.3 through 3.1.4 vulnerable.
-- Expose only the terminal `ci` branch-protection context; it always runs and requires `bun`, `node22`, and `node24` success.
+- Expose only the terminal `ci` branch-protection context; it always runs and requires `bun`, `node22`, `node24`, and `package_smoke` success.
 - Reconcile current active OpenSpec and contributor guidance without changing archives.
 
 ## Non-Goals

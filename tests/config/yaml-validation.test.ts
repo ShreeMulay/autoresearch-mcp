@@ -61,7 +61,7 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 		"bun",
 		"node22",
 		"node24",
-		"package",
+		"package_smoke",
 		"ci",
 	]);
 
@@ -73,9 +73,11 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 			"docker.io/library/node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436",
 		node24:
 			"docker.io/library/node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03",
+		packageSmoke:
+			"docker.io/library/node:22.22.1-bookworm-slim@sha256:4f77a690f2f8946ab16fe1e791a3ac0667ae1c3575c3e4d0d4589e9ed5bfaf3d",
 	};
 
-	for (const jobName of ["bun", "node22", "node24", "package"] as const) {
+	for (const jobName of ["bun", "node22", "node24", "package_smoke"] as const) {
 		const job = workflow.jobs[jobName] as {
 			"runs-on": string;
 			container: { image: string };
@@ -83,7 +85,7 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 		};
 		expect(job["runs-on"]).toBe("forgejo-ci");
 		expect(job.container.image).toBe(
-			jobName === "package" ? images.node22 : images[jobName],
+			jobName === "package_smoke" ? images.packageSmoke : images[jobName],
 		);
 		const setup = String(job.steps[0]?.run);
 		expect(setup).toContain("apt-get update");
@@ -101,7 +103,13 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 	}
 
 	const allCommands = workflowSource;
-	expect(workflow.jobs.package.needs).toEqual(["bun", "node22", "node24"]);
+	expect(workflow.jobs.package_smoke.needs).toEqual(["bun", "node22", "node24"]);
+	const packageSetup = String(
+		(workflow.jobs.package_smoke.steps as Array<Record<string, unknown>>)[0]?.run,
+	);
+	for (const diagnostic of ["df -h .", "df -i .", "ls -A ."]) {
+		expect(packageSetup).toContain(diagnostic);
+	}
 	for (const command of [
 		"bun install --frozen-lockfile",
 		"bun audit",
@@ -144,12 +152,12 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 		steps: Array<Record<string, unknown>>;
 	};
 	expect(terminal["runs-on"]).toBe("forgejo-ci");
-	expect(terminal.needs).toEqual(["bun", "node22", "node24", "package"]);
+	expect(terminal.needs).toEqual(["bun", "node22", "node24", "package_smoke"]);
 	expect(terminal.if).toBe("always()");
 	expect(terminal.container.image).toBe(images.bun);
 	expect(terminal.steps).toHaveLength(1);
 	const terminalRun = String(terminal.steps[0]?.run);
-	for (const dependency of ["bun", "node22", "node24", "package"]) {
+	for (const dependency of ["bun", "node22", "node24", "package_smoke"]) {
 		expect(terminalRun).toContain(`needs.${dependency}.result`);
 		expect(terminalRun).toContain("success");
 	}

@@ -96,11 +96,11 @@ jobs:
           test ! -e "$SANDBOX/.claude/skills" && test ! -e "$SANDBOX/.opencode/skills"
           rm -rf "$SANDBOX"
 
-  package:
+  package_smoke:
     needs: [bun, node22, node24]
     runs-on: forgejo-ci
     container:
-      image: docker.io/library/node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436
+      image: docker.io/library/node:22.22.1-bookworm-slim@sha256:4f77a690f2f8946ab16fe1e791a3ac0667ae1c3575c3e4d0d4589e9ed5bfaf3d
     steps:
       - name: Verify pre-checkout runtime
         run: |
@@ -110,6 +110,9 @@ jobs:
           test -r /etc/ssl/certs/ca-certificates.crt
           git --version
           node --version
+          df -h .
+          df -i .
+          ls -A .
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -127,7 +130,7 @@ jobs:
 
   ci:
     if: always()
-    needs: [bun, node22, node24, package]
+    needs: [bun, node22, node24, package_smoke]
     runs-on: forgejo-ci
     container:
       image: docker.io/oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4
@@ -137,4 +140,4 @@ jobs:
           test "${{ needs.bun.result }}" = success
           test "${{ needs.node22.result }}" = success
           test "${{ needs.node24.result }}" = success
-          test "${{ needs.package.result }}" = success
+          test "${{ needs.package_smoke.result }}" = success
