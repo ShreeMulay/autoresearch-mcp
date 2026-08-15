@@ -101,8 +101,11 @@ readonly SHA256_FIRST="$(sha256sum "$FIRST_TGZ" | cut -d' ' -f1)"
 readonly SHA256_SECOND="$(sha256sum "$SECOND_TGZ" | cut -d' ' -f1)"
 readonly SHA512_FIRST="$(sha512sum "$FIRST_TGZ" | cut -d' ' -f1)"
 readonly SHA512_SECOND="$(sha512sum "$SECOND_TGZ" | cut -d' ' -f1)"
+readonly TAR_SHA256_FIRST="$(gzip -dc "$FIRST_TGZ" | sha256sum | cut -d' ' -f1)"
 [[ "$SHA256_FIRST" == "$SHA256_SECOND" ]] || fail "repeated npm pack SHA-256 mismatch"
 [[ "$SHA512_FIRST" == "$SHA512_SECOND" ]] || fail "repeated npm pack SHA-512 mismatch"
+printf 'artifact_candidate=%s sha256=%s sha512=%s tar_sha256=%s\n' \
+  "$TARBALL" "$SHA256_FIRST" "$SHA512_FIRST" "$TAR_SHA256_FIRST"
 node - "$RELEASE_ARTIFACT" "$SHA256_FIRST" "$SHA512_FIRST" "$PACKAGE_VERSION" <<'EOF'
 const fs = require("node:fs");
 const [path, sha256, sha512, version] = process.argv.slice(2);
