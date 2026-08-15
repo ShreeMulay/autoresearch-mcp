@@ -21,6 +21,7 @@ jobs:
           apt-get install -y --no-install-recommends ca-certificates git nodejs npm
           rm -rf /var/lib/apt/lists/*
           npm install --global npm@10.9.4
+          hash -r
           test -r /etc/ssl/certs/ca-certificates.crt
           git --version
           node --version

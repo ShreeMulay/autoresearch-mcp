@@ -97,6 +97,7 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 		if (jobName === "bun") {
 			expect(setup).toContain("git nodejs npm");
 			expect(setup).toContain("npm install --global npm@10.9.4");
+			expect(setup).toContain("hash -r");
 			expect(setup).toContain('test "$(npm --version)" = 10.9.4');
 		}
 		expect(job.steps[1]).toEqual({
