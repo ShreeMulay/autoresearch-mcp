@@ -1,0 +1,83 @@
+name: Security Scanning
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    runs-on: forgejo-ci
+    steps:
+      - name: Check out repository
+        uses: https://data.forgejo.org/actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan current tree with Gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_dir="$(mktemp -d)"
+          trap 'rm -rf "$tool_dir"' EXIT
+          archive="$tool_dir/gitleaks.tar.gz"
+          curl --fail --show-error --silent --location --max-redirs 3 \
+            --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            --connect-timeout 10 --max-time 120 --retry 2 --retry-all-errors \
+            --output "$archive" \
+            'https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz'
+          printf '%s  %s\n' \
+            '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb' \
+            "$archive" | sha256sum --check --strict -
+          tar --extract --gzip --file "$archive" --directory "$tool_dir" gitleaks
+          chmod 0755 "$tool_dir/gitleaks"
+          set +e
+          "$tool_dir/gitleaks" dir . --redact=100 --exit-code=2 --no-banner --no-color \
+            >"$tool_dir/gitleaks-output" 2>&1
+          status=$?
+          set -e
+          case "$status" in
+            0) ;;
+            2)
+              printf 'warning: Gitleaks found potential leaks; details suppressed\n'
+              ;;
+            *)
+              printf 'error: Gitleaks failed with status %s; output suppressed\n' "$status" >&2
+              exit "$status"
+              ;;
+          esac
+      - name: Scan explicit dependency lockfiles with OSV-Scanner
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_dir="$(mktemp -d)"
+          trap 'rm -rf "$tool_dir"' EXIT
+          scanner="$tool_dir/osv-scanner"
+          curl --fail --show-error --silent --location --max-redirs 3 \
+            --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            --connect-timeout 10 --max-time 120 --retry 2 --retry-all-errors \
+            --output "$scanner" \
+            'https://github.com/google/osv-scanner/releases/download/v2.5.1/osv-scanner_linux_amd64'
+          printf '%s  %s\n' \
+            'f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be' \
+            "$scanner" | sha256sum --check --strict -
+          chmod 0755 "$scanner"
+          mkdir -p "$tool_dir/home" "$tool_dir/cache"
+          set +e
+          HOME="$tool_dir/home" XDG_CACHE_HOME="$tool_dir/cache" \
+            "$scanner" scan --offline --download-offline-databases \
+              --lockfile=:bun.lock \
+            >"$tool_dir/osv-output" 2>&1
+          status=$?
+          set -e
+          case "$status" in
+            0) ;;
+            1)
+              printf 'warning: OSV-Scanner found vulnerabilities; details suppressed\n'
+              ;;
+            *)
+              printf 'error: OSV-Scanner failed with status %s; output suppressed\n' "$status" >&2
+              exit "$status"
+              ;;
+          esac
