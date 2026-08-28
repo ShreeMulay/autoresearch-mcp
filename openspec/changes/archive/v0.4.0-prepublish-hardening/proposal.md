@@ -1,6 +1,6 @@
 # Change: v0.4.0 Pre-Publish Hardening
 
-## Status: IMPLEMENTED LEGACY SCOPE — REGISTRY CLOSEOUT PENDING
+## Status: COMPLETE — REGISTRY CLOSEOUT DELEGATED
 
 ## Why
 
@@ -43,21 +43,18 @@ A full post-merge codebase review (oracle, 2026-06-12) found one security blocke
 - [x] `bun test` (101 pass / 0 fail), `bunx tsc --noEmit`, `bun run lint`, `bun run build` all pass.
 - [x] Packed tarball smoke passes for both public bins, including tools/list and serverInfo 0.4.0 assertions and unknown-flag rejection.
 - [x] PR #8 merged to `main` (squash `a971c0a`); subsequent protected CI/runtime reconciliation verified pinned Bun and Node.js 22/24 validation.
-- [ ] Publish the verified `0.4.0` tarball and complete byte-verifying registry smoke. BLOCKED: requires operator npm authentication from approved external user-level config; tracked in Beads.
+- [x] Delegate the still-unexecuted verified-tarball publication and byte-verifying registry smoke to the active `v0.4.0-release-closeout` change; this does not claim npm authentication or publication occurred.
 - [x] Forgejo repo `thekidneyexperts/autoresearch-mcp` created (public), `main` pushed at `a971c0a`, branch protection restored (no direct push, 1 approval), GitHub configured as push mirror with sync_on_commit.
 - [x] Active validation migrated from Woodpecker to PR-only `.forgejo/workflows/ci.yml`; the single required context is the terminal `ci` job, which requires the pinned Bun and Node.js 22/24 jobs.
 - [x] Deferred review backlog landed via Forgejo PR #3 (`be1247d`): missing recipe templates, real zod-to-json-schema, budget/risk/constraints exposure, shared artifact inference, tag normalization, E2E readiness polling, and Biome config.
 - [x] Final release hygiene PR: remove/fail-close the remaining fake-score `get_template` fallback, add regression coverage, update CHANGELOG for PR #3/final fix, resolve AGENTS.md observability guidance, archive completed v0.3.0 OpenSpec, and run quality/package gates.
 - [x] Complete the superseding v0.4.0 integrity remediation and obtain protected package/CI evidence before publication.
 
-## Close Criteria
+## Completion and Delegation
 
-This change can be archived only after all of the following are true:
+The implementation scope is complete and may be archived before the registry transaction:
 
-- Final release hygiene PR is merged through Forgejo with required Forgejo Actions CI green.
-- `bun test`, `bun run typecheck`, `bun run lint`, and `bun run build` pass on the release commit.
-- Packed-package audit/smoke proves runtime files are included and local DBs/secrets/worktree files are excluded.
-- `autoresearch-mcp@0.4.0` is published to npm.
-- Registry smoke verifies the server bin and skill installer from the published package.
-- Git tag `v0.4.0` exists on Forgejo and the GitHub mirror.
-- Bead `autoresearch-mcp-7qa` is closed.
+- [x] Final release hygiene landed through Forgejo with required Forgejo Actions CI green.
+- [x] Release-commit tests, typecheck, lint, build, and packed-package audit/smoke passed for this implementation scope.
+- [x] The active `v0.4.0-release-closeout` change exclusively owns npm authentication, publication, byte-verifying registry smoke, Forgejo-first tagging, GitHub tag mirroring, final release archival, and closure of `autoresearch-mcp-7qa`.
+- [x] Record that `autoresearch-mcp@0.4.0` remains unpublished and untagged; archiving this completed change does not satisfy or bypass the active closeout gates.

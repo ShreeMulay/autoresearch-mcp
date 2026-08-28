@@ -1,8 +1,10 @@
 # Change: Migrate Validation to Forgejo Actions
 
-## Status: APPROVED
+## Status: COMPLETE
 
 Approved by the user's Make it so directive.
+
+The migration implementation, structural review, and exact-head Forgejo Actions verification are complete. The unavailable local OpenSpec CLI was not run; its structural check was completed by manual review as recorded in the task evidence.
 
 ## Program Bead
 

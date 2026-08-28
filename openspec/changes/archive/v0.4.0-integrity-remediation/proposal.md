@@ -1,6 +1,6 @@
 # Change: v0.4.0 Integrity Remediation
 
-## Status: IMPLEMENTED — REGISTRY CLOSEOUT PENDING
+## Status: COMPLETE — REGISTRY CLOSEOUT DELEGATED
 
 ## Bead
 
@@ -8,7 +8,7 @@
 
 ## Why
 
-The 2026-07-16 comprehensive release review overturned the earlier release-ready verdict. The identified evaluator, CLI, packed-guidance, scaffold-control, result-integrity, catalog-loading, dependency/runtime, and protected packed-CI defects have been remediated and landed. The package remains unpublished and untagged while npm authentication and deterministic registry closeout are pending.
+The 2026-07-16 comprehensive release review overturned the earlier release-ready verdict. The identified evaluator, CLI, packed-guidance, scaffold-control, result-integrity, catalog-loading, dependency/runtime, and protected packed-CI defects have been remediated and landed. This change owns no remaining release ceremony: the still-active `v0.4.0-release-closeout` change exclusively owns npm authentication, publication, registry smoke, tagging, and final release archival. The package remains unpublished and untagged.
 
 ## Scope
 
@@ -50,4 +50,4 @@ The 2026-07-16 comprehensive release review overturned the earlier release-ready
 
 ## Deployment and Rollback
 
-There is no deployed service. Delivery is an npm package release after Forgejo merge and CI. Until publication, rollback is branch/PR abandonment. Forgejo `main` is verified and ordinarily mirrored to GitHub before publication. Publishing is an explicitly operator-authorized irreversible step. Reconstruct the tarball from merged main with the exact pinned CI toolchain and publish only if SHA-256 and SHA-512 match the immutable CI evidence. Registry smoke must verify version, clean installation, both bins, and MCP handshake. Only then may that commit be tagged `v0.4.0`, and only that release tag is mirrored after smoke. If smoke fails, deprecate the immutable faulty version, do not tag or close the release, and use a new version for correction only with explicit operator authorization.
+There is no deployed service. The integrity-remediation implementation and its protected CI landing are complete. The active `v0.4.0-release-closeout` change is the sole authority for the unpublished npm registry transaction, byte-verifying smoke, any post-publication rollback, release tagging, and final release archival; archiving this completed implementation change does not assert that any of those actions occurred.
