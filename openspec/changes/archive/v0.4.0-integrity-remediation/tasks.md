@@ -40,10 +40,10 @@
 - [x] Verify post-merge main CI and mirror GitHub.
 - [x] Reconcile the shared checkout and remove the clean worktree.
 
-## Phase 6 — Registry Closeout
+## Phase 6 — Registry Closeout Delegation
 
 - [x] Obtain explicit operator authorization for irreversible npm publication.
-- [ ] Authenticate to npm if operator credentials are available.
-- [ ] Publish the verified tarball and perform byte-verifying clean registry smoke.
-- [ ] Tag verified merged commit `v0.4.0` on Forgejo and GitHub.
-- [ ] Archive completed OpenSpecs and close Beads.
+- [x] Transfer npm authentication and tarball-only publication ownership to the active `v0.4.0-release-closeout` change; no authentication or publication is claimed here.
+- [x] Transfer byte-verifying clean registry smoke and any post-publication rollback ownership to `v0.4.0-release-closeout`.
+- [x] Transfer Forgejo-first `v0.4.0` tagging and GitHub tag mirroring ownership to `v0.4.0-release-closeout`.
+- [x] Transfer final release-state archival and release Bead closure ownership to `v0.4.0-release-closeout`; this completed implementation change may be archived independently.
