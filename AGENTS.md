@@ -39,31 +39,19 @@ MCP server for autoresearch technique discovery, experiment scaffolding, trackin
 - Phase 3: Docker sandbox + code execution
 - Phase 4: Full Nightcrawler bounded episodes
 
-## Landing the Plane (Session Completion)
+## Beads Safety
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+- Use exactly `bd 0.43.0 (dev)` with `BEADS_NO_DAEMON=1`, an external database, and both auto-flush and auto-import disabled.
+- Infer the canonical issue prefix read-only from the existing ledger; never invent or change it.
+- Export mutations only through `/home/dev/ai_projects/scripts/export_beads_preserving_history.py` with its required safeguards.
+- Never hand-edit `.beads` or run raw `bd sync`.
 
-**MANDATORY WORKFLOW:**
+## Landing
 
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
-   ```bash
-   git pull --rebase
-   bd sync
-   git push
-   git status  # MUST show "up to date with origin"
-   ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
-
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
+- Run the repository's applicable validation before committing and pushing the existing branch.
+- Open a Forgejo pull request and require `Forgejo Actions CI / ci (pull_request)` to pass for the exact pushed HEAD.
+- Merge only through the protected path after that exact-head check is green; never bypass branch protection.
+- Oracle input, when used, is advisory and never an approval gate.
 
 ## Observability / OpenObserve Standard
 
