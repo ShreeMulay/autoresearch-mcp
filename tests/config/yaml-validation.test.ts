@@ -186,10 +186,10 @@ test("dependency remediation floors remain blocking package contracts", async ()
 	expect(packageJson.resolutions).toEqual({
 		"@hono/node-server": "1.19.15",
 		"body-parser": "2.3.0",
-		"fast-uri": "3.1.5",
+		"fast-uri": "3.1.6",
 		hono: "4.12.34",
 		"ip-address": "10.4.0",
-		qs: "6.15.3",
+		qs: "6.16.0",
 	});
 
 	const smoke = await readFile(join(root, "ci/package-smoke.sh"), "utf8");

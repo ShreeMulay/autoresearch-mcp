@@ -252,7 +252,7 @@ env -i HOME="$WORK_DIR/home" PATH="$PATH" npm_config_userconfig=/dev/null npm_co
 node - "$WORK_DIR/consumer-graph.json" <<'EOF'
 const fs = require("node:fs");
 const graph = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-const floors = { "@hono/node-server": "1.19.15", "body-parser": "2.3.0", "fast-uri": "3.1.3", "hono": "4.12.34", "ip-address": "10.4.0", "qs": "6.15.3" };
+const floors = { "@hono/node-server": "1.19.15", "body-parser": "2.3.0", "fast-uri": "3.1.3", "hono": "4.12.34", "ip-address": "10.4.0", "qs": "6.16.0" };
 const found = new Map(Object.keys(floors).map((name) => [name, []]));
 const visit = (node) => {
   for (const [name, dependency] of Object.entries(node.dependencies ?? {})) {
