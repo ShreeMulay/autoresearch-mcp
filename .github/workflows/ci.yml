@@ -34,31 +34,6 @@ jobs:
       - run: bun test
       - run: bun run build
 
-  package-smoke:
-    name: Packed artifact smoke
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22.22.1"
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.3.10"
-      - name: Run reusable packed-artifact smoke
-        env:
-          PACKAGE_SMOKE_LOG_DIR: ${{ runner.temp }}/package-smoke-logs
-        run: bash ci/package-smoke.sh
-      - name: Preserve immutable smoke log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: package-smoke-log-${{ github.sha }}
-          path: ${{ runner.temp }}/package-smoke-logs/
-          if-no-files-found: error
-
   installer-node:
     name: Installer (node ${{ matrix.node-version }})
     runs-on: ubuntu-latest

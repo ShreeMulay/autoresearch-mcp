@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly EXPECTED_BUN_VERSION="${EXPECTED_BUN_VERSION:-1.3.10}"
-readonly EXPECTED_NODE_VERSION="${EXPECTED_NODE_VERSION:-v22.22.1}"
-readonly EXPECTED_NPM_VERSION="${EXPECTED_NPM_VERSION:-10.9.4}"
 readonly REPO_ROOT="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 readonly EXPECTED_MANIFEST="$REPO_ROOT/ci/expected-package-manifest.txt"
-readonly RELEASE_ARTIFACT="$REPO_ROOT/ci/release-artifact.json"
 ARTIFACT_OUTPUT=''
+ARTIFACT_INPUT=''
 
 while (($#)); do
   case "$1" in
@@ -16,9 +13,23 @@ while (($#)); do
       ARTIFACT_OUTPUT=$2
       shift 2
       ;;
+    --artifact-input)
+      (($# >= 2)) || { printf 'package-smoke: --artifact-input requires an absolute .tgz\n' >&2; exit 64; }
+      ARTIFACT_INPUT=$2
+      shift 2
+      ;;
     *) printf 'package-smoke: unknown argument: %s\n' "$1" >&2; exit 64 ;;
   esac
 done
+
+if [[ -n "$ARTIFACT_INPUT" ]]; then
+  [[ "$ARTIFACT_INPUT" == /* ]] || { printf 'package-smoke: --artifact-input must be absolute\n' >&2; exit 64; }
+  [[ "$ARTIFACT_INPUT" == *.tgz && -f "$ARTIFACT_INPUT" && ! -L "$ARTIFACT_INPUT" ]] || {
+    printf 'package-smoke: --artifact-input must be a regular .tgz\n' >&2
+    exit 64
+  }
+  ARTIFACT_INPUT="$(realpath "$ARTIFACT_INPUT")"
+fi
 
 if [[ -n "$ARTIFACT_OUTPUT" ]]; then
   [[ "$ARTIFACT_OUTPUT" == /* ]] || { printf 'package-smoke: --artifact-output must be absolute\n' >&2; exit 64; }
@@ -49,8 +60,9 @@ cd "$WORK_DIR"
 }
 
 readonly COMMIT_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+readonly PACKAGE_NAME="$(node -p "require('$REPO_ROOT/package.json').name")"
 readonly PACKAGE_VERSION="$(node -p "require('$REPO_ROOT/package.json').version")"
-readonly TARBALL="autoresearch-mcp-${PACKAGE_VERSION}.tgz"
+readonly TARBALL="${PACKAGE_NAME//\//-}-${PACKAGE_VERSION}.tgz"
 readonly LOG_FILE="$LOG_DIR/package-smoke-${COMMIT_SHA}.log"
 
 touch "$LOG_FILE"
@@ -80,16 +92,22 @@ expect_failure() {
 readonly BUN_VERSION="$(bun --version)"
 readonly NODE_VERSION="$(node --version)"
 readonly NPM_VERSION="$(npm --version)"
-[[ "$BUN_VERSION" == "$EXPECTED_BUN_VERSION" ]] || fail "expected Bun $EXPECTED_BUN_VERSION, got $BUN_VERSION"
-[[ "$NODE_VERSION" == "$EXPECTED_NODE_VERSION" ]] || fail "expected Node $EXPECTED_NODE_VERSION, got $NODE_VERSION"
-[[ "$NPM_VERSION" == "$EXPECTED_NPM_VERSION" ]] || fail "expected npm $EXPECTED_NPM_VERSION, got $NPM_VERSION"
+node - "$BUN_VERSION" "$NODE_VERSION" <<'EOF' || fail "host runtime does not satisfy package engine ranges"
+const [bun, node] = process.argv.slice(2);
+const major = (value) => Number(value.replace(/^v/, "").split(".")[0]);
+const [bunMajor, bunMinor, bunPatch] = bun.split(".").map(Number);
+if (bunMajor !== 1 || bunMinor < 3 || (bunMinor === 3 && bunPatch < 10)) process.exit(1);
+if (![22, 24].includes(major(node))) process.exit(1);
+EOF
 
 printf 'commit=%s\n' "$COMMIT_SHA"
 printf 'bun=%s node=%s npm=%s\n' "$BUN_VERSION" "$NODE_VERSION" "$NPM_VERSION"
 
-readonly STAGED_ROOT="$WORK_DIR/source"
-readonly STAGE_HELPER="$WORK_DIR/stage-tracked.cjs"
-cat > "$STAGE_HELPER" <<'EOF'
+FIRST_TGZ=''
+if [[ -z "$ARTIFACT_INPUT" ]]; then
+  readonly STAGED_ROOT="$WORK_DIR/source"
+  readonly STAGE_HELPER="$WORK_DIR/stage-tracked.cjs"
+  cat > "$STAGE_HELPER" <<'EOF'
 "use strict";
 const fs = require("node:fs");
 
@@ -171,42 +189,30 @@ if (count === 0) throw new Error("git index contains no tracked regular files");
 process.stdout.write(`staged_tracked_files=${count}\n`);
 EOF
 
-git -C "$REPO_ROOT" ls-files --stage -z | node "$STAGE_HELPER" "$REPO_ROOT" "$STAGED_ROOT" || fail "canonical tracked-file staging failed"
+  git -C "$REPO_ROOT" ls-files --stage -z | node "$STAGE_HELPER" "$REPO_ROOT" "$STAGED_ROOT" || fail "canonical tracked-file staging failed"
 
-mkdir -p "$WORK_DIR/pack-1" "$WORK_DIR/pack-2" "$WORK_DIR/home"
-for destination in "$WORK_DIR/pack-1" "$WORK_DIR/pack-2"; do
-  env -i HOME="$WORK_DIR/home" PATH="$PATH" npm_config_userconfig=/dev/null npm_config_update_notifier=false \
-    npm pack "$STAGED_ROOT" --pack-destination "$destination" --ignore-scripts --loglevel error >/dev/null
-done
+  mkdir -p "$WORK_DIR/pack-1" "$WORK_DIR/pack-2" "$WORK_DIR/home"
+  for destination in "$WORK_DIR/pack-1" "$WORK_DIR/pack-2"; do
+    env -i HOME="$WORK_DIR/home" PATH="$PATH" npm_config_userconfig=/dev/null npm_config_update_notifier=false \
+      npm pack "$STAGED_ROOT" --pack-destination "$destination" --ignore-scripts --loglevel error >/dev/null
+  done
 
-readonly FIRST_TGZ="$WORK_DIR/pack-1/$TARBALL"
-readonly SECOND_TGZ="$WORK_DIR/pack-2/$TARBALL"
-[[ -f "$FIRST_TGZ" && -f "$SECOND_TGZ" ]] || fail "npm pack did not create $TARBALL twice"
+  FIRST_TGZ="$WORK_DIR/pack-1/$TARBALL"
+  readonly SECOND_TGZ="$WORK_DIR/pack-2/$TARBALL"
+  [[ -f "$FIRST_TGZ" && -f "$SECOND_TGZ" ]] || fail "npm pack did not create $TARBALL twice"
 
+  readonly SHA256_SECOND="$(sha256sum "$SECOND_TGZ" | cut -d' ' -f1)"
+  readonly SHA512_SECOND="$(sha512sum "$SECOND_TGZ" | cut -d' ' -f1)"
+  [[ "$(sha256sum "$FIRST_TGZ" | cut -d' ' -f1)" == "$SHA256_SECOND" ]] || fail "repeated npm pack SHA-256 mismatch"
+  [[ "$(sha512sum "$FIRST_TGZ" | cut -d' ' -f1)" == "$SHA512_SECOND" ]] || fail "repeated npm pack SHA-512 mismatch"
+else
+  mkdir -p "$WORK_DIR/home"
+  FIRST_TGZ="$ARTIFACT_INPUT"
+fi
+readonly FIRST_TGZ
 readonly SHA256_FIRST="$(sha256sum "$FIRST_TGZ" | cut -d' ' -f1)"
-readonly SHA256_SECOND="$(sha256sum "$SECOND_TGZ" | cut -d' ' -f1)"
 readonly SHA512_FIRST="$(sha512sum "$FIRST_TGZ" | cut -d' ' -f1)"
-readonly SHA512_SECOND="$(sha512sum "$SECOND_TGZ" | cut -d' ' -f1)"
-readonly TAR_SHA256_FIRST="$(gzip -dc "$FIRST_TGZ" | sha256sum | cut -d' ' -f1)"
-[[ "$SHA256_FIRST" == "$SHA256_SECOND" ]] || fail "repeated npm pack SHA-256 mismatch"
-[[ "$SHA512_FIRST" == "$SHA512_SECOND" ]] || fail "repeated npm pack SHA-512 mismatch"
-printf 'artifact_candidate=%s sha256=%s sha512=%s tar_sha256=%s\n' \
-  "$TARBALL" "$SHA256_FIRST" "$SHA512_FIRST" "$TAR_SHA256_FIRST"
-node - "$RELEASE_ARTIFACT" "$SHA256_FIRST" "$SHA512_FIRST" "$PACKAGE_VERSION" <<'EOF'
-const fs = require("node:fs");
-const [path, sha256, sha512, version] = process.argv.slice(2);
-const value = JSON.parse(fs.readFileSync(path, "utf8"));
-const keys = ["integrity", "package", "publisher", "registry", "registryReads", "schemaVersion", "sha256", "sha512", "version"].sort();
-if (JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(keys)) throw new Error("release artifact has an open or incomplete schema");
-if (value.schemaVersion !== 1 || value.package !== "autoresearch-mcp" || value.version !== version || value.registry !== "https://registry.npmjs.org/" || value.publisher !== "shreemulay") throw new Error("release artifact identity mismatch");
-if (!/^[a-f0-9]{64}$/.test(value.sha256) || !/^[a-f0-9]{128}$/.test(value.sha512)) throw new Error("release artifact digest encoding mismatch");
-if (value.sha256 !== sha256 || value.sha512 !== sha512) throw new Error("packed artifact digest mismatch");
-if (value.integrity !== `sha512-${Buffer.from(sha512, "hex").toString("base64")}`) throw new Error("release artifact SRI mismatch");
-const reads = value.registryReads;
-const readKeys = ["attempts", "backoffSeconds"].sort();
-if (!reads || JSON.stringify(Object.keys(reads).sort()) !== JSON.stringify(readKeys) || !Number.isInteger(reads.attempts) || reads.attempts < 2 || reads.attempts > 5 || !Array.isArray(reads.backoffSeconds) || reads.backoffSeconds.length !== reads.attempts || reads.backoffSeconds.some((n) => !Number.isInteger(n) || n < 0 || n > 30)) throw new Error("invalid bounded registry-read policy");
-EOF
-printf 'artifact=%s sha256=%s sha512=%s\n' "$TARBALL" "$SHA256_FIRST" "$SHA512_FIRST"
+printf 'artifact=%s sha256=%s sha512=%s\n' "$(basename "$FIRST_TGZ")" "$SHA256_FIRST" "$SHA512_FIRST"
 
 tar -tzf "$FIRST_TGZ" | LC_ALL=C sort > "$WORK_DIR/manifest.txt"
 readonly DENYLIST='(^|/)(\.env($|\.)|\.git($|/)|\.slim($|/)|node_modules($|/)|tests?($|/)|worktrees?($|/)|[^/]+\.(db|sqlite|sqlite3|log))'
@@ -214,6 +220,12 @@ while IFS= read -r entry; do
   [[ ! "$entry" =~ $DENYLIST ]] || fail "manifest entry is denied: $entry"
 done < "$WORK_DIR/manifest.txt"
 diff -u "$EXPECTED_MANIFEST" "$WORK_DIR/manifest.txt" || fail "packed manifest differs from expected manifest"
+tar -xOzf "$FIRST_TGZ" package/package.json | node -e '
+const fs = require("node:fs");
+const [name, version] = process.argv.slice(1);
+const value = JSON.parse(fs.readFileSync(0, "utf8"));
+if (value.name !== name || value.version !== version) process.exit(1);
+' "$PACKAGE_NAME" "$PACKAGE_VERSION" || fail "artifact package identity mismatch"
 node - "$WORK_DIR/manifest.txt" <<'EOF'
 const fs = require("node:fs");
 const entries = fs.readFileSync(process.argv[2], "utf8").trim().split("\n");
@@ -274,7 +286,7 @@ for (const [name, floor] of Object.entries(floors)) {
   console.log(`consumer-floor=${name}>=${floor} installed=${[...new Set(versions)].join(",")}`);
 }
 EOF
-readonly INSTALLED="$WORK_DIR/consumer/node_modules/autoresearch-mcp"
+readonly INSTALLED="$WORK_DIR/consumer/node_modules/$PACKAGE_NAME"
 readonly MAIN_BIN="$WORK_DIR/consumer/node_modules/.bin/autoresearch-mcp"
 readonly INSTALLER_BIN="$WORK_DIR/consumer/node_modules/.bin/autoresearch-install-skill"
 [[ -x "$MAIN_BIN" && -x "$INSTALLER_BIN" ]] || fail "installed package bins are not executable"

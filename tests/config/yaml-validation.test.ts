@@ -94,17 +94,12 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 		expect(setup).toContain("rm -rf /var/lib/apt/lists/*");
 		expect(setup).toContain("test -r /etc/ssl/certs/ca-certificates.crt");
 		expect(setup).toContain("git --version");
-		expect(setup).toContain("node --version");
 		if (jobName === "bun") {
-			expect(setup).toContain("ca-certificates curl git xz-utils");
-			expect(setup).toContain(
-				"https://nodejs.org/dist/v22.22.1/node-v22.22.1-linux-x64.tar.xz",
-			);
-			expect(setup).toContain(
-				"9a6bc82f9b491279147219f6a18add1e18424dce90d41d2a5fcd69d4924ba3aa",
-			);
-			expect(setup).toContain('test "$(node --version)" = v22.22.1');
-			expect(setup).toContain('test "$(npm --version)" = 10.9.4');
+			expect(setup).toContain("ca-certificates git");
+			expect(setup).not.toContain("nodejs.org/dist");
+			expect(setup).not.toContain("sha256sum");
+		} else {
+			expect(setup).toContain("node --version");
 		}
 		expect(job.steps[1]).toEqual({
 			name: "Checkout",
@@ -126,6 +121,15 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 	for (const diagnostic of ["df -h .", "df -i .", "ls -A ."]) {
 		expect(packageSetup).toContain(diagnostic);
 	}
+	const packageSteps = workflow.jobs.package_smoke.steps as Array<
+		Record<string, unknown>
+	>;
+	expect(packageSteps[2]?.name).toBe("Install minimum Bun runtime");
+	const minimumRuntimeSetup = String(packageSteps[2]?.run);
+	expect(minimumRuntimeSetup).toContain("npm install --global bun@1.3.10");
+	expect(minimumRuntimeSetup).toContain('test "$(bun --version)" = 1.3.10');
+	expect(minimumRuntimeSetup).not.toContain('test "$(node --version)" =');
+	expect(minimumRuntimeSetup).not.toContain('test "$(npm --version)" =');
 	for (const command of [
 		"bun install --frozen-lockfile",
 		"bun audit",
@@ -135,9 +139,7 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 		"bun run build",
 		"npm install --global bun@1.3.10",
 		'test "$(bun --version)" = 1.3.10',
-		'test "$(node --version)" = v22.22.1',
-		'test "$(npm --version)" = 10.9.4',
-		'PACKAGE_SMOKE_LOG_DIR="$CI_WORKSPACE/.ci-logs" bash ci/package-smoke.sh',
+		"bash ci/package-smoke.sh",
 		"node --check scripts/install-skill.js",
 		'HOME="$SANDBOX" node bin/autoresearch-install-skill --dry-run --target claude',
 		'HOME="$SANDBOX" node bin/autoresearch-install-skill --dry-run --target opencode',
@@ -149,6 +151,8 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 	]) {
 		expect(allCommands).toContain(command);
 	}
+	expect(allCommands).not.toContain("PACKAGE_SMOKE_LOG_DIR");
+	expect(allCommands).not.toContain("CI_WORKSPACE");
 
 	for (const forbidden of [
 		"bun:latest",
@@ -177,6 +181,46 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 		expect(terminalRun).toContain(`needs.${dependency}.result`);
 		expect(terminalRun).toContain("success");
 	}
+});
+
+test("GitHub mirror CI stays proportionate and non-authoritative", async () => {
+	const workflowSource = await readFile(
+		join(root, ".github/workflows/ci.yml"),
+		"utf8",
+	);
+	const workflow = parseDocument(workflowSource, { strict: true }).toJS() as {
+		on: Record<string, unknown>;
+		permissions: Record<string, string>;
+		jobs: Record<string, Record<string, unknown>>;
+	};
+
+	expect(workflow.on).toEqual({
+		push: { branches: ["main"] },
+		pull_request: { branches: ["main"] },
+	});
+	expect(workflow.permissions).toEqual({ contents: "read" });
+	expect(Object.keys(workflow.jobs)).toEqual(["quality", "installer-node"]);
+	expect(workflow.jobs["installer-node"]?.strategy).toEqual({
+		"fail-fast": false,
+		matrix: { "node-version": ["22", "24"] },
+	});
+	for (const forbidden of [
+		"package-smoke",
+		"upload-artifact",
+		"workflow_dispatch",
+		"release:",
+		"publish",
+		"deploy",
+		"secrets.",
+	]) {
+		expect(workflowSource).not.toContain(forbidden);
+	}
+});
+
+test("obsolete fixed release artifact is not committed", async () => {
+	expect(await Bun.file(join(root, "ci/release-artifact.json")).exists()).toBe(
+		false,
+	);
 });
 
 test("dependency remediation floors remain blocking package contracts", async () => {

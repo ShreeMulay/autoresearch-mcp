@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.0] - Unreleased
 
-Planned first npm release. Versions 0.1.0 through 0.3.0 were never published to a registry. Integrity remediation and protected package/CI verification are complete. Version 0.4.0 remains unpublished and untagged pending npm authentication, tarball-only publication, byte-verifying registry smoke, Forgejo-first tagging, and release-state archival.
+Planned first npm release. Versions 0.1.0 through 0.3.0 were never published to a registry. Package safety and protected Forgejo CI verification are complete. Version 0.4.0 remains unpublished and untagged pending authenticated tarball publication, installed-package smoke, and Forgejo-first tagging.
 
 ### Security
 
@@ -24,7 +24,7 @@ Planned first npm release. Versions 0.1.0 through 0.3.0 were never published to 
 
 ### Added
 
-- **Deterministic release closeout** — checked-in controls reconstruct and verify the approved tarball, publish only those exact bytes, verify registry byte identity before clean installed-package smoke, and keep publication, deprecation, deprecation clearing, and tagging behind separate fail-closed confirmations.
+- **Lean release controls** — checked-in commands build and test a package tarball, publish only an explicit absolute `.tgz`, and smoke that artifact before normal Forgejo-first tagging.
 - **`is_baseline` on `log_result`** — baseline measurements seed `best_score` until an improved iteration lands. Schema migration v3 adds the column.
 - **Curated scaffold templates** — `scaffold_experiment` now uses the recipe templates bundled under `catalog/templates/<recipe>/` when present, and appends an experiment metadata section.
 - **Complete curated recipe template coverage** — `test-amplification`, `ml-training`, and `literature-synthesis` now ship recipe-specific `program.md` and `eval.sh` templates alongside the existing templates.
