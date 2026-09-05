@@ -18,7 +18,7 @@ Use synthetic, non-sensitive data only; examples and tests use synthetic data on
 
 ## Release Status
 
-Version 0.4.0 is not yet published or tagged. Integrity remediation and its protected package/CI landing are complete. The remaining release steps are npm authentication, tarball-only publication, byte-verifying registry smoke, Forgejo-first tag closeout, and OpenSpec/Beads archival. The registry commands below are post-release instructions; until publication, use a reviewed source checkout rather than assuming `autoresearch-mcp` is available from npm.
+Version 0.4.0 is not yet published or tagged. Package safety and protected Forgejo CI are in place; the remaining release work is the authenticated npm publish, installed-package smoke, and Forgejo-first tag push described in [CONTRIBUTING.md](./CONTRIBUTING.md). Until those steps succeed, use a reviewed source checkout rather than assuming `autoresearch-mcp` is available from npm.
 
 ## Quick Start
 

@@ -158,33 +158,23 @@ TypeScript conventions used in this project:
 
 ## Maintainer release runbook
 
-Release controls always use the canonical registry, `https://registry.npmjs.org/`. npm credentials must live only in an approved external user-level npm config outside the repository and worktree; never put credentials in arguments, repository files, artifacts, logs, CI, or review tooling.
-
-From the clean release commit, use the checked-in controller. Supply the exact, operation-specific confirmation requested by the controller through `RELEASE_CONFIRMATION`; confirmations are not reusable across operations. Use an absolute `RELEASE_EVIDENCE_PATH` outside the repository and worktree. `publish` performs registry smoke after reconciliation and writes evidence there. Standalone `smoke` is the non-mutating recovery and verification path: it captures the live release authority mirrored by Forgejo and GitHub, verifies the published bytes and installed runtime against that authority, and writes the same immutable evidence.
+Release only from a clean revision already merged through the protected Forgejo pull-request path. Confirm that the checked-out revision is the intended release revision and that its exact Forgejo CI head passed. npm credentials must live in approved external user-level npm configuration outside the repository and worktree; never put credentials in command arguments, repository files, artifacts, logs, or CI.
 
 ```bash
-# Publish at most once; successful reconciliation includes smoke and evidence writing:
-RELEASE_EVIDENCE_PATH='/absolute/external/release-evidence.json' \
-  RELEASE_CONFIRMATION='<publish|package|version|registry|publisher|release-sha|artifact-sha256>' \
-  bun ci/release-control.ts publish
+test -z "$(git status --porcelain)"
+bun run test:package -- --artifact-output /absolute/release-dir
+npm whoami --registry=https://registry.npmjs.org/
+bun run release:control -- publish /absolute/release-dir/autoresearch-mcp-0.4.0.tgz
+bun run release:control -- smoke /absolute/release-dir/autoresearch-mcp-0.4.0.tgz
 
-# To capture live mirrored authority and write evidence without publishing:
-RELEASE_EVIDENCE_PATH='/absolute/external/release-evidence.json' \
-  bun ci/release-control.ts smoke
-
-# Only after a deterministic failure of published, byte-matching registry content:
-RELEASE_CONFIRMATION='<deprecate|publisher|package|version|registry|fixed-deprecation-message>' \
-  bun ci/release-control.ts deprecate
-RELEASE_CONFIRMATION='<clear-deprecation|publisher|package|version|registry|empty-message>' \
-  bun ci/release-control.ts clear-deprecation
-
-# Only after successful registry smoke, using its immutable external evidence:
-RELEASE_EVIDENCE_PATH='/absolute/external/release-evidence.json' \
-  RELEASE_CONFIRMATION='<tag|package|version|release-sha|evidence-sha256>' \
-  bun ci/release-control.ts tag
+# Only after smoke succeeds:
+git tag -a v0.4.0 -m "autoresearch-mcp v0.4.0"
+git push forgejo v0.4.0
+# Verify the Forgejo tag before mirroring it:
+git push origin v0.4.0
 ```
 
-`publish` mutates only the verified absolute `.tgz`, never the working tree or `.`. An ambiguous publish result is reconciled with bounded read-only checks but is never automatically retried. Smoke never automatically republishes, deprecates, or tags. Deprecation and clearing it each require separate authorization; `npm unpublish` is prohibited. Tagging is annotated and Forgejo-first: Forgejo must verify exact before any GitHub tag push. Archive the active release OpenSpecs and close release Beads only after byte-verifying registry smoke and both remote tags are exact.
+The controller accepts only an absolute tarball path; never publish the working directory. npm versions are immutable: if `0.4.0` already exists, or a publish result is conflicting or ambiguous, stop and reconcile rather than retrying or replacing it. Do not automatically deprecate anything, and do not unpublish. Do not create or push the tag unless registry smoke succeeds; push Forgejo first and GitHub only after the Forgejo tag is verified.
 
 ## Filing issues
 
