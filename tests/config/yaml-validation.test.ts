@@ -95,7 +95,7 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 		expect(setup).toContain("test -r /etc/ssl/certs/ca-certificates.crt");
 		expect(setup).toContain("git --version");
 		if (jobName === "bun") {
-			expect(setup).toContain("ca-certificates git");
+			expect(setup).toContain("ca-certificates git nodejs npm");
 			expect(setup).not.toContain("nodejs.org/dist");
 			expect(setup).not.toContain("sha256sum");
 		} else {
