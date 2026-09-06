@@ -8,6 +8,8 @@ description: |
   outputs, while the outer loop tunes the shared extraction and summarization approach
   across a corpus. This recipe is valuable for evidence reviews, competitive analyses,
   and any workflow where structured understanding matters more than raw generation speed.
+  The bundled template evaluator is only a citation-density smoke heuristic; it does
+  not evaluate semantic faithfulness or source validity.
 when_to_use: |
   - You need to synthesize many documents, papers, reports, or web sources into structured knowledge.
   - Quality can be judged with a rubric for completeness, traceability, and faithfulness.

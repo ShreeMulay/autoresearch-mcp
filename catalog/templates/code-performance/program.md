@@ -14,9 +14,9 @@ Your job is to find faster approaches without breaking correctness.
 - Keep the benchmark runner and test suite as the ground truth
 
 ## Metric
-- Run `./eval.sh`
+- Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
-- Higher is better
+- Follow the scaffolded metric direction and require strict improvement
 - Treat score changes as the decision rule for accepting or rejecting changes
 
 ## Required Safety Rule
@@ -30,7 +30,7 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 2. Form a hypothesis about the main bottleneck
 3. Change the implementation
 4. Run tests if available
-5. Run `./eval.sh`
+5. Run `autoresearch/eval.sh` from the project root
 6. Keep the change only if correctness holds and score improves
 7. Repeat
 

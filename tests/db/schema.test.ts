@@ -14,7 +14,10 @@ import {
 } from "../../src/db/experiments.js";
 import { getDb, resetDb } from "../../src/db/schema.js";
 
-function legacySpec(metricDirection?: "maximize" | "minimize"): string {
+function legacySpec(
+	metricDirection?: "maximize" | "minimize",
+	acceptanceRule = "strict-improvement",
+): string {
 	return JSON.stringify({
 		target_artifact: "target.md",
 		artifact_type: "content",
@@ -24,7 +27,7 @@ function legacySpec(metricDirection?: "maximize" | "minimize"): string {
 		...(metricDirection === undefined
 			? {}
 			: { metric_direction: metricDirection }),
-		acceptance_rule: "strict-improvement",
+		acceptance_rule: acceptanceRule,
 		budget: {},
 		environment: {},
 		stopping_conditions: ["budget-exhaustion"],
@@ -187,7 +190,7 @@ describe("Schema migrations", () => {
 		expect(tableNames).toContain("catalog_fts");
 		expect(tableNames).toContain("experiments");
 		expect(tableNames).toContain("experiment_results");
-		expect(tableNames).toContain("technique_outcomes");
+		expect(tableNames).not.toContain("technique_outcomes");
 		expect(tableNames).toContain("_migrations");
 	});
 
@@ -289,7 +292,7 @@ describe("populated pre-v3 migration", () => {
 		try {
 			createPreV3Database(dbPath, {
 				// Legacy specs without this field used the schema's maximize default.
-				maximize: legacySpec(),
+				maximize: legacySpec(undefined, "pareto"),
 				minimize: legacySpec("minimize"),
 			});
 			resetDb(dbPath);
@@ -302,6 +305,7 @@ describe("populated pre-v3 migration", () => {
 				).spec,
 			);
 			expect(normalizedLegacySpec.metric_direction).toBe("maximize");
+			expect(normalizedLegacySpec.acceptance_rule).toBe("strict-improvement");
 
 			expect(
 				getExperimentResults("maximize").map(

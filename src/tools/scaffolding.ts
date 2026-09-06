@@ -199,7 +199,7 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 					await ensureSafeScaffoldDirectory(autoresearchDir);
 					await ensureScaffoldFilesWritable(destinationPaths, overwrite);
 
-					const evaluatorCommand = "./autoresearch/eval.sh";
+					const evaluatorCommand = "autoresearch/eval.sh";
 					const spec = buildScaffoldExperimentSpec({
 						targetArtifact,
 						metricName: metric_name,
@@ -405,16 +405,31 @@ function normalizeGeneratedProgram(
 	},
 ): string {
 	const withoutGeneratedSections = removeGeneratedSection(
-		removeGeneratedSection(content, "Run Controls"),
+		removeGeneratedSection(
+			removeGeneratedSection(content, "Run Controls"),
+			"Evaluation and Acceptance",
+		),
 		"Experiment Metadata",
 	);
+	const withoutContradictions = withoutGeneratedSections
+		.replaceAll("./eval.sh", "autoresearch/eval.sh")
+		.replace(/^.*Higher is better.*$/gm, "")
+		.replace(/^.*Lower is better.*$/gm, "");
 	const budget = args.spec.budget;
 	const risk = args.spec.risk_policy;
 	const constraints = args.spec.constraints;
 
 	return joinText(
 		[
-			withoutGeneratedSections.trimEnd(),
+			withoutContradictions.trimEnd(),
+			"",
+			"## Evaluation and Acceptance",
+			"- Run `autoresearch/eval.sh` from the project root.",
+			"- Before evaluating candidates, register/log exactly one iteration 0 result with `is_baseline=true`.",
+			"- Candidate results must use later iteration numbers and must not set `is_baseline=true`.",
+			args.spec.metric_direction === "maximize"
+				? "- Accept a candidate only when its score is strictly greater than the best earlier score."
+				: "- Accept a candidate only when its score is strictly less than the best earlier score.",
 			"",
 			"## Experiment Metadata",
 			joinText("- Metric Name: ", sanitizeInline(args.metricName)),
@@ -542,6 +557,12 @@ function buildProgramTemplate(args: {
 		"",
 		"## Strategy Hints",
 		...strategyHints,
+		"",
+		"## Evaluation and Acceptance",
+		"- Run `autoresearch/eval.sh` from the project root.",
+		"- Before evaluating candidates, register/log exactly one iteration 0 result with `is_baseline=true`.",
+		"- Candidate results must use later iteration numbers and must not set `is_baseline=true`.",
+		"- Accept a candidate only when it strictly improves on the best earlier score in the declared metric direction.",
 	];
 
 	lines.push(
@@ -574,7 +595,7 @@ function buildFailClosedEvalTemplate(args: { metricName: string }): string {
 function buildResultsTemplate(): string {
 	return joinText(
 		[
-			"iteration\tscore\timproved\tchange_description\tduration_seconds\tcost_tokens\tcost_dollars",
+			"iteration\tscore\timproved\tis_baseline\tchange_description\tduration_seconds\tcost_tokens\tcost_dollars",
 		].join("\n"),
 		"\n",
 	);

@@ -197,12 +197,7 @@ export const ConstraintsSchema = z
 		}
 	});
 
-export const AcceptanceRule = z.enum([
-	"strict-improvement",
-	"confidence-threshold",
-	"pareto",
-	"gated-constraints",
-]);
+export const AcceptanceRule = z.literal("strict-improvement");
 export type AcceptanceRule = z.infer<typeof AcceptanceRule>;
 
 export const StoppingCondition = z.enum([
@@ -308,20 +303,3 @@ export const ExperimentResultSchema = z.object({
 	created_at: z.string().optional(),
 });
 export type ExperimentResult = z.infer<typeof ExperimentResultSchema>;
-
-// ============================================================
-// TechniqueOutcome — meta-learning record
-// ============================================================
-
-export const TechniqueOutcomeSchema = z.object({
-	id: z.number().optional(),
-	technique_id: z.string(),
-	domain: z.string(),
-	project_name: z.string().optional(),
-	outcome: z.enum(["success", "partial", "failed", "abandoned"]),
-	notes: z.string().optional(),
-	score_improvement: z.number().optional(),
-	total_experiments: z.number().optional(),
-	created_at: z.string().optional(),
-});
-export type TechniqueOutcome = z.infer<typeof TechniqueOutcomeSchema>;

@@ -9,7 +9,6 @@ import {
 	getExperimentResults,
 	listExperiments,
 	logExperimentResult,
-	logTechniqueOutcome,
 	updateExperiment,
 } from "../../src/db/experiments.js";
 import { resetDb } from "../../src/db/schema.js";
@@ -384,21 +383,5 @@ describe("listExperiments", () => {
 
 		const limited = listExperiments({ limit: 2 });
 		expect(limited.length).toBe(2);
-	});
-});
-
-describe("logTechniqueOutcome", () => {
-	it("creates a technique outcome record", () => {
-		const id = logTechniqueOutcome({
-			technique_id: "hill-climbing",
-			domain: "prompt-engineering",
-			project_name: "TestProj",
-			outcome: "success",
-			notes: "Worked well for short prompts",
-			score_improvement: 25.5,
-			total_experiments: 10,
-		});
-
-		expect(id).toBeGreaterThan(0);
 	});
 });

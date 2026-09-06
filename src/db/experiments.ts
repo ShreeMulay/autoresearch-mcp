@@ -203,7 +203,9 @@ export function logExperimentResult(result: {
 		const ordered = getAllExperimentResults(result.experiment_id);
 		const baselineResults = ordered.filter((entry) => entry.is_baseline);
 		if (baselineResults.length !== 1) {
-			throw new Error("Experiment results require exactly one baseline");
+			throw new Error(
+				"Before logging candidates, log exactly one earlier result with is_baseline=true",
+			);
 		}
 		const baseline = baselineResults[0];
 		if (
@@ -320,37 +322,6 @@ function assertFiniteMetadata(value: unknown, seen = new Set<object>()): void {
 	for (const entry of Array.isArray(value) ? value : Object.values(value)) {
 		assertFiniteMetadata(entry, seen);
 	}
-}
-
-// ============================================================
-// Log technique outcome (meta-learning)
-// ============================================================
-
-export function logTechniqueOutcome(outcome: {
-	technique_id: string;
-	domain: string;
-	project_name?: string;
-	outcome: string;
-	notes?: string;
-	score_improvement?: number;
-	total_experiments?: number;
-}): number {
-	const db = getDb();
-	const result = db
-		.prepare(
-			`INSERT INTO technique_outcomes (technique_id, domain, project_name, outcome, notes, score_improvement, total_experiments, created_at)
-       VALUES ($technique_id, $domain, $project_name, $outcome, $notes, $score_improvement, $total_experiments, datetime('now'))`,
-		)
-		.run({
-			$technique_id: outcome.technique_id,
-			$domain: outcome.domain,
-			$project_name: outcome.project_name ?? null,
-			$outcome: outcome.outcome,
-			$notes: outcome.notes ?? null,
-			$score_improvement: outcome.score_improvement ?? null,
-			$total_experiments: outcome.total_experiments ?? null,
-		} as Params);
-	return result.lastInsertRowid as number;
 }
 
 // ============================================================

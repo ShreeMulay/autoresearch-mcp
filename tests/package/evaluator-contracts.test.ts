@@ -1,5 +1,12 @@
 import { afterAll, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readFile,
+	rm,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -96,9 +103,17 @@ describe("curated evaluator contracts", () => {
 		);
 	});
 
-	it("literature-synthesis emits finite scores that depend on the document fixture", async () => {
+	it("literature-synthesis honestly labels a finite, fixture-sensitive citation-density smoke heuristic", async () => {
 		const dir = await tempDir();
 		const target = join(dir, "synthesis.md");
+		const evaluator = await readFile(
+			join(repoRoot, "catalog", "templates", "literature-synthesis", "eval.sh"),
+			"utf8",
+		);
+		expect(evaluator).toContain("Citation-density smoke heuristic only");
+		expect(evaluator).toContain(
+			"does not validate sources, claims, or semantic",
+		);
 		await writeFile(target, "A claim without a citation.\n");
 		const first = await runEvaluator("literature-synthesis", dir, [target]);
 		await writeFile(target, "A supported claim [Source 2025].\n");

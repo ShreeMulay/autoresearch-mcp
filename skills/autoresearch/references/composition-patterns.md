@@ -87,4 +87,4 @@ Phase 2: custom recipe (exploit, fine-tune in good region)
 Phase 3: champion-challenger (validate, production A/B test)
 ```
 
-Log each phase as separate experiments. The technique_outcomes table will show which phase was most impactful.
+Log each phase as a separate experiment and compare its recorded result history directly.

@@ -58,10 +58,6 @@ const TEST_QUERIES: Array<{ query: string; expected_tool: string; key_signals: s
   { query: "Show me the program.md template for config-tuning", expected_tool: "get_template", key_signals: ["template", "file", "recipe"] },
   { query: "Get the eval.sh template for content-revision", expected_tool: "get_template", key_signals: ["template", "file", "recipe"] },
 
-  // log_technique_outcome (2 queries)
-  { query: "Record that prompt-optimization worked great for our chatbot project", expected_tool: "log_technique_outcome", key_signals: ["outcome", "technique", "domain", "worked", "success"] },
-  { query: "Log that bayesian optimization partially worked for config tuning", expected_tool: "log_technique_outcome", key_signals: ["outcome", "technique", "domain", "log"] },
-
   // update_experiment (1 query)
   { query: "Mark experiment xyz as completed", expected_tool: "update_experiment", key_signals: ["update", "status", "experiment"] },
 ]

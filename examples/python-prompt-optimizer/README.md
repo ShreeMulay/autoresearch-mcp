@@ -25,24 +25,15 @@ Edit prompt.txt → Run eval.sh → Score improved? → Keep or revert → Repea
 ```bash
 # Check baseline score
 bash eval.sh
-# → 66.0
+# → 96.0
 
 # Read the program.md for strategy hints, then iterate on prompt.txt
 # After each change, run eval.sh and check if score improved
 ```
 
-## Results from 5 iterations
+## Checked-in baseline
 
-| Iter | Score | Change | Kept? |
-|------|-------|--------|-------|
-| 0 | 66.0 | Baseline | - |
-| 1 | 76.0 | Added code formatting instruction | Yes (+10) |
-| 2 | 96.0 | Added edge cases / best practices | Yes (+20) |
-| 3 | 96.0 | Added practical examples emphasis | No (0) |
-| 4 | 96.0 | Added comprehensive coverage | No (0) |
-| 5 | 96.0 | Restructured into sections | No (0) |
-
-**Result: 66 → 96 in 2 effective iterations.** The prompt improved by 45% with just two targeted changes.
+The checked-in `prompt.txt` currently scores **96.0** with the checked-in evaluator and fixture. `results.tsv` records that current state as iteration 0 with `is_baseline=true`; it does not claim a reproducible history for earlier prompt versions that are not checked in. Candidate changes should be retained only when their score is strictly greater than the current best score.
 
 ## How to Use with autoresearch-mcp
 
@@ -58,16 +49,15 @@ In any Claude Code / OpenCode session with autoresearch-mcp connected:
 # 3. Register for tracking
 > register_experiment(project_path: "...", metric_name: "eval_score", ...)
 
-# 4. After each iteration, log the result
-> log_result(experiment_id: "...", iteration: 1, score: 76.0, improved: true, ...)
+# 4. Before candidates, log exactly one baseline
+> log_result(experiment_id: "...", iteration: 0, score: 96.0, is_baseline: true, improved: false, ...)
 
-# 5. When done, log the outcome
-> log_technique_outcome(technique_id: "prompt-optimization", outcome: "success", ...)
+# 5. After each candidate, log the result without asserting improved
+> log_result(experiment_id: "...", iteration: 1, score: 97.0, ...)
 ```
 
 ## Key Takeaways
 
-1. **Small, targeted changes work.** Two precise additions beat five vague ones.
-2. **The ratchet converges fast.** Most gains come in the first 2-3 iterations.
-3. **Diminishing returns are real.** After hitting the evaluator's ceiling, more changes don't help.
-4. **The evaluator is everything.** This demo uses keyword matching — a real project would use LLM-as-judge or task-specific benchmarks.
+1. **Establish the baseline first.** Log exactly one earlier result with `is_baseline=true` before candidates.
+2. **Retention is strict.** Keep a candidate only when it strictly improves on the best earlier score.
+3. **The evaluator is limited.** This demo uses deterministic keyword matching; a real project needs a task-specific benchmark or review process.

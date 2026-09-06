@@ -117,17 +117,17 @@ A good `program.md` should explain:
 - danger zones and anti-patterns
 - when to continue and when to stop
 
-`eval.sh` should be deterministic when possible and print a single float to stdout, where higher is better.
+`autoresearch/eval.sh` should be run from the project root, be deterministic when possible, and print a single finite float to stdout. Whether higher or lower is better is defined by `metric_direction`. Log exactly one iteration 0 result with `is_baseline=true` before candidates.
 
 ## Ratchet execution phases
 
 When contributing toward autonomous execution, keep the `run_ratchet` path phased and explicit:
 
 1. **Plan**: load the experiment spec, budget, risk policy, and constraints.
-2. **Baseline**: run the evaluator once and record the baseline score.
+2. **Baseline**: run the evaluator once and record exactly one iteration 0 result with `is_baseline=true`.
 3. **Mutate**: propose one bounded change to the target artifact.
 4. **Evaluate**: run the evaluator and collect the scalar score plus costs.
-5. **Accept or revert**: keep strict improvements and reject regressions unless the experiment specifies another acceptance rule.
+5. **Accept or revert**: keep only strict improvements in the declared metric direction and reject all other candidates.
 6. **Record**: log iteration score, change description, cost, and whether it improved the champion.
 7. **Stop**: honor max iterations, time, cost, plateau, approval, and safety constraints.
 

@@ -152,7 +152,6 @@ describe("MCP Server E2E", () => {
 			"get_template",
 			"list_experiments",
 			"log_result",
-			"log_technique_outcome",
 			"register_experiment",
 			"scaffold_experiment",
 			"search_techniques",
@@ -163,5 +162,22 @@ describe("MCP Server E2E", () => {
 
 	it("server process stays alive", () => {
 		expect(child.killed).toBe(false);
+	});
+
+	it("rejects invalid list_experiments statuses during schema validation", async () => {
+		child.stdin?.write(
+			`${JSON.stringify({
+				jsonrpc: "2.0",
+				id: 3,
+				method: "tools/call",
+				params: {
+					name: "list_experiments",
+					arguments: { status: "not-a-status" },
+				},
+			})}\n`,
+		);
+		const response = await waitForJsonRpcResponse(3);
+		expect(response.error ?? response.result).toBeDefined();
+		expect(JSON.stringify(response)).toMatch(/invalid|status|validation/i);
 	});
 });

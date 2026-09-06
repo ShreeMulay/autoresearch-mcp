@@ -1,7 +1,7 @@
 # Literature Synthesis Program
 
 ## Objective
-Improve a literature synthesis artifact so it becomes more complete, faithful to sources, and useful for decision-making while preserving citation integrity.
+Improve a literature synthesis artifact while preserving citation integrity. The bundled evaluator is only a citation-density smoke heuristic; it does not establish semantic faithfulness or source validity.
 
 ## Mission
 Use this recipe for review papers, evidence summaries, research briefs, citation-backed memos, and synthesis prompts where the evaluator rewards coverage, faithfulness, and clarity.
@@ -12,19 +12,19 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 ## Target
 - Primary artifact: synthesis document, outline, prompt, extraction schema, or evidence table
 - Supporting artifacts: source list, notes, citation map, inclusion/exclusion criteria
-- Ground truth evaluator: `./eval.sh`
+- Citation-density smoke heuristic: `autoresearch/eval.sh` from the project root
 
 ## Metric
-- Run `./eval.sh`
+- Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
-- Higher is better
+- Follow the scaffolded metric direction and require strict improvement
 - The score should reward source-grounded claims, relevant coverage, and explicit uncertainty
 
 ## Core Loop
 1. Identify the research question, audience, and decision the synthesis supports.
 2. Inspect source coverage and find one missing angle, conflicting finding, or weak citation chain.
 3. Improve structure, evidence mapping, or wording without inventing unsupported claims.
-4. Run `./eval.sh` and preserve improvements that increase faithfulness and utility.
+4. Run `autoresearch/eval.sh` from the project root and use its citation-density result only as a smoke heuristic.
 5. Repeat with the next evidence gap or clarity bottleneck.
 
 ## Evidence Rules

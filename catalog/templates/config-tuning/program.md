@@ -13,9 +13,9 @@ Use disciplined parameter changes, measure outcomes, and keep the best valid con
 - The evaluator determines whether a config is actually better
 
 ## Metric
-- Run `./eval.sh`
+- Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
-- Higher is better
+- Follow the scaffolded metric direction and require strict improvement
 - Accept changes based on measured score, not intuition alone
 
 ## Validity Rule
@@ -32,7 +32,7 @@ Use prior results to guide the next candidate.
 1. Read the current config and understand the main knobs
 2. Identify which parameters likely matter most
 3. Propose one change or one small set of coordinated changes
-4. Run `./eval.sh`
+4. Run `autoresearch/eval.sh` from the project root
 5. Record the outcome mentally or in notes
 6. Keep improvements and reject regressions
 7. Narrow in on promising regions

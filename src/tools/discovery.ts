@@ -101,12 +101,10 @@ export function rankRecipes(
 
 		if (
 			opts.needsOvernight &&
-			recipe.tags.some((tag) =>
-				["autonomous", "overnight", "batch"].includes(tag),
-			)
+			recipe.tags.some((tag) => ["overnight", "batch"].includes(tag))
 		) {
 			score += 2;
-			reasons.push("Supports overnight autonomous operation");
+			reasons.push("Suitable for a human-supervised overnight batch");
 		}
 
 		if (recipe.requires_gpu) {
@@ -470,7 +468,7 @@ export function registerDiscoveryTools(mcp: McpServer): void {
 			needs_overnight: z
 				.boolean()
 				.optional()
-				.describe("Do you want this to run autonomously while you sleep?"),
+				.describe("Do you need a human-supervised overnight batch workflow?"),
 			domain: z
 				.string()
 				.optional()

@@ -17,9 +17,9 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 - Evaluation artifact: rubric-based scoring from `eval.sh`
 
 ## Metric
-- Run `./eval.sh`
+- Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
-- Higher is better
+- Follow the scaffolded metric direction and require strict improvement
 - The score should reflect rubric quality across the content set
 
 ## Two-Loop Structure
@@ -46,7 +46,7 @@ Common rubric dimensions may include:
 2. Identify the weakest rubric dimension
 3. Update the strategy or instructions
 4. Apply the strategy to one or more articles
-5. Run `./eval.sh`
+5. Run `autoresearch/eval.sh` from the project root
 6. Keep the strategy only if aggregate score improves
 7. Repeat
 

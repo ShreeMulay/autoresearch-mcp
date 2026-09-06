@@ -17,16 +17,16 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 - The evaluator is the source of truth, not your intuition
 
 ## Metric
-- Run `./eval.sh`
+- Run `autoresearch/eval.sh` from the project root
 - It must print a single float to stdout
-- Higher is better
+- Follow the scaffolded metric direction and require strict improvement
 - Optimize strictly for that score while preserving the real intent of the prompt
 
 ## Core Loop
 1. Read the current prompt carefully
 2. Form a hypothesis for why it is underperforming
 3. Make one focused change or one coherent bundle of related changes
-4. Run `./eval.sh`
+4. Run `autoresearch/eval.sh` from the project root
 5. If the score improves, keep the change
 6. If the score gets worse or stays flat, revert or pivot
 7. Repeat

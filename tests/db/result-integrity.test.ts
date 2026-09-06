@@ -53,32 +53,13 @@ function log(args: {
 beforeEach(() => resetDb(":memory:"));
 
 describe("server-derived result integrity", () => {
-	it.each(["confidence-threshold", "pareto", "gated-constraints"] as const)(
-		"rejects unsupported acceptance rule %s before writes",
-		(acceptanceRule) => {
-			create(`unsupported-${acceptanceRule}`, {
-				acceptance_rule: acceptanceRule,
-			});
-			expect(() =>
-				log({
-					experiment_id: `unsupported-${acceptanceRule}`,
-					iteration: 0,
-					score: 1,
-					is_baseline: true,
-				}),
-			).toThrow(/unsupported acceptance rule/i);
-			expect(getExperimentResults(`unsupported-${acceptanceRule}`)).toEqual([]);
-			expect(
-				getExperiment(`unsupported-${acceptanceRule}`)?.best_score,
-			).toBeUndefined();
-		},
-	);
-
 	it("requires exactly one earlier baseline before any candidate write", () => {
 		create("baseline-order");
 		expect(() =>
 			log({ experiment_id: "baseline-order", iteration: 1, score: 2 }),
-		).toThrow(/baseline/i);
+		).toThrow(
+			"Before logging candidates, log exactly one earlier result with is_baseline=true",
+		);
 		expect(getExperimentResults("baseline-order")).toEqual([]);
 
 		log({

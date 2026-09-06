@@ -110,24 +110,10 @@ const INITIAL_SCHEMA_SQL = `
     created_at TEXT DEFAULT (datetime('now'))
   );
 
-  -- Technique outcomes (meta-learning)
-  CREATE TABLE IF NOT EXISTS technique_outcomes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    technique_id TEXT NOT NULL,
-    domain TEXT NOT NULL,
-    project_name TEXT,
-    outcome TEXT NOT NULL CHECK(outcome IN ('success', 'partial', 'failed', 'abandoned')),
-    notes TEXT,
-    score_improvement REAL,
-    total_experiments INTEGER,
-    created_at TEXT DEFAULT (datetime('now'))
-  );
-
   -- Indexes
   CREATE INDEX IF NOT EXISTS idx_catalog_layer ON catalog_items(layer);
   CREATE INDEX IF NOT EXISTS idx_experiments_status ON experiments(status);
   CREATE INDEX IF NOT EXISTS idx_results_experiment ON experiment_results(experiment_id);
-  CREATE INDEX IF NOT EXISTS idx_outcomes_technique ON technique_outcomes(technique_id);
 `;
 
 // ============================================================
@@ -169,12 +155,18 @@ function migrateLegacyResultSemantics(db: Database): void {
 			);
 		}
 		let directionMissing = false;
+		let acceptanceChanged = false;
 		let candidate = spec;
 		if (typeof spec === "object" && spec !== null && !Array.isArray(spec)) {
 			directionMissing = !Object.hasOwn(spec, "metric_direction");
-			if (directionMissing) {
-				candidate = { ...spec, metric_direction: "maximize" };
-			}
+			acceptanceChanged =
+				(spec as Record<string, unknown>).acceptance_rule !==
+				"strict-improvement";
+			candidate = {
+				...spec,
+				...(directionMissing ? { metric_direction: "maximize" } : {}),
+				acceptance_rule: "strict-improvement",
+			};
 		}
 		const parsed = ExperimentSpecSchema.safeParse(candidate);
 		if (!parsed.success) {
@@ -182,7 +174,7 @@ function migrateLegacyResultSemantics(db: Database): void {
 				`Cannot migrate experiment ${experiment.id}: invalid spec: ${parsed.error.message}`,
 			);
 		}
-		if (directionMissing) {
+		if (directionMissing || acceptanceChanged) {
 			updateSpec.run({
 				$id: experiment.id,
 				$spec: JSON.stringify(parsed.data),
@@ -263,6 +255,38 @@ function migrateLegacyResultSemantics(db: Database): void {
 	`);
 }
 
+function migrateAcceptanceRuleCutover(db: Database): void {
+	const experiments = db
+		.prepare("SELECT id, spec FROM experiments ORDER BY id")
+		.all() as { id: string; spec: string }[];
+	const update = db.prepare(
+		"UPDATE experiments SET spec = $spec WHERE id = $id",
+	);
+	for (const experiment of experiments) {
+		let spec: unknown;
+		try {
+			spec = JSON.parse(experiment.spec);
+		} catch {
+			throw new Error(
+				`Cannot migrate experiment ${experiment.id}: invalid spec JSON`,
+			);
+		}
+		if (typeof spec !== "object" || spec === null || Array.isArray(spec)) {
+			throw new Error(
+				`Cannot migrate experiment ${experiment.id}: invalid spec`,
+			);
+		}
+		const migrated = { ...spec, acceptance_rule: "strict-improvement" };
+		const parsed = ExperimentSpecSchema.safeParse(migrated);
+		if (!parsed.success) {
+			throw new Error(
+				`Cannot migrate experiment ${experiment.id}: ${parsed.error.message}`,
+			);
+		}
+		update.run({ $id: experiment.id, $spec: JSON.stringify(parsed.data) });
+	}
+}
+
 const MIGRATIONS: Migration[] = [
 	{
 		version: 1,
@@ -329,6 +353,12 @@ const MIGRATIONS: Migration[] = [
       ADD COLUMN is_baseline INTEGER NOT NULL DEFAULT 0;
     `,
 		apply: migrateLegacyResultSemantics,
+	},
+	{
+		version: 4,
+		name: "strict_improvement_only",
+		sql: "",
+		apply: migrateAcceptanceRuleCutover,
 	},
 ];
 

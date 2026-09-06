@@ -12,12 +12,12 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 ## Target
 - Primary artifact: model config, training script, feature pipeline, or experiment recipe
 - Supporting artifacts: validation data, metrics output, logs, and reproducibility notes
-- Ground truth evaluator: `./eval.sh`
+- Ground truth evaluator: `autoresearch/eval.sh` from the project root
 
 ## Metric
-- Run `./eval.sh`
+- Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
-- Higher is better unless your evaluator inverts a loss into a score
+- Follow the scaffolded metric direction and require strict improvement
 - Always preserve the validation split and leakage boundaries
 
 ## Core Loop

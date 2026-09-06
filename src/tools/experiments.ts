@@ -14,7 +14,7 @@ import {
 	type Experiment,
 	type ExperimentResult,
 	type ExperimentSpec,
-	type ExperimentStatus,
+	ExperimentStatus,
 	RecipeId,
 	RiskPolicySchema,
 } from "../types.js";
@@ -392,7 +392,7 @@ export function registerExperimentTools(mcp: McpServer): void {
 		"list_experiments",
 		"List tracked experiments with optional filtering.",
 		{
-			status: z.string().optional().describe("Optional status filter"),
+			status: ExperimentStatus.optional().describe("Optional status filter"),
 			project: z.string().optional().describe("Optional project filter"),
 			limit: z
 				.number()

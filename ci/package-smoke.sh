@@ -337,7 +337,7 @@ const [path, version] = process.argv.slice(2);
 const messages = fs.readFileSync(path, "utf8").trim().split("\n").map(JSON.parse);
 const byId = new Map(messages.filter((message) => message.id).map((message) => [message.id, message]));
 if (byId.get(1)?.result?.serverInfo?.version !== version) throw new Error("initialize server version mismatch");
-const expectedTools = ["get_experiment", "get_server_info", "get_technique", "get_template", "list_experiments", "log_result", "log_technique_outcome", "register_experiment", "scaffold_experiment", "search_techniques", "suggest_technique", "update_experiment"];
+const expectedTools = ["get_experiment", "get_server_info", "get_technique", "get_template", "list_experiments", "log_result", "register_experiment", "scaffold_experiment", "search_techniques", "suggest_technique", "update_experiment"];
 const actualTools = (byId.get(2)?.result?.tools ?? []).map((tool) => tool.name).sort();
 if (JSON.stringify(actualTools) !== JSON.stringify(expectedTools)) throw new Error(`tool list mismatch: ${actualTools.join(",")}`);
 const serverInfo = JSON.parse(byId.get(3)?.result?.content?.[0]?.text ?? "null");

@@ -7,9 +7,9 @@ MCP server implementing Karpathy's autoresearch pattern as a composable techniqu
 ### What's Working
 - **Catalog**: 30 YAML techniques across 4 layers (8 strategies, 8 evaluators, 6 patterns, 8 recipes)
 - **SQLite + FTS5**: Full-text search, catalog CRUD
-- **12 MCP Tools**: catalog discovery, experiment tracking, scaffolding, diagnostics, and outcome logging
+- **11 MCP Tools**: catalog discovery, experiment tracking, scaffolding, and diagnostics
 - **4 Resources**: Catalog, experiment schema, technique schema, and workflow guide
-- **3 Prompts**: Discovery, experiment, meta-learning
+- **3 Prompts**: Technique selection, experiment review, and program generation
 - **Self-optimization**: Tool descriptions, suggest_technique quality evaluated
 - **License**: Apache-2.0
 - **Repo**: https://github.com/ShreeMulay/autoresearch-mcp
@@ -24,7 +24,7 @@ MCP server implementing Karpathy's autoresearch pattern as a composable techniqu
 
 ### Architecture
 - `src/db/`: SQLite schema, techniques CRUD, experiments CRUD
-- `src/tools/`: Discovery, experiments, scaffolding, meta tools
+- `src/tools/`: Discovery, experiments, scaffolding, and server metadata tools
 - `src/types.ts`: ExperimentSpec, TechniqueSpec, CatalogItem schemas
 - `catalog/`: 30 YAML files in 4 layer directories + templates
 - `examples/`: Working python-prompt-optimizer demo

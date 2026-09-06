@@ -2,13 +2,13 @@ id: bounded-episode
 name: Bounded Episode
 layer: pattern
 description: |
-  Bounded Episode runs autonomous work in explicit, time-boxed sessions with strict
+  Bounded Episode organizes human/agent-driven work into explicit, time-boxed sessions with strict
   budget caps, stop conditions, and durable handoffs between episodes. Instead of
   assuming uninterrupted execution, it treats pause and resume as a first-class part
-  of the workflow. This makes it well suited for overnight agents, supervised autonomy,
+  of the workflow. This makes it well suited for supervised batches
   and any environment where trust and spend must stay contained.
 when_to_use: |
-  - You want autonomous runs to continue for a fixed window such as 30 to 60 minutes.
+  - You want supervised work to continue for a fixed window such as 30 to 60 minutes.
   - You need hard controls for token spend, tool usage, or wall-clock budget.
   - The system must hand off cleanly between sessions, operators, or scheduled jobs.
   - You expect runs to pause overnight, between approvals, or at governance checkpoints.
@@ -20,7 +20,7 @@ when_not_to_use: |
 core_pattern: |
   1. Define the episode duration, budget caps, success criteria, and termination conditions.
   2. Load the latest checkpoint, experiment history, and unresolved next actions.
-  3. Execute as many experiments as fit within the episode's remaining time and spend budget.
+  3. Have the external human/agent orchestrator execute experiments within the remaining time and spend budget.
   4. Continuously monitor for stop triggers such as budget exhaustion, target metric hit, repeated failures, or timeout.
   5. Before ending, persist the current state, best artifact, logs, and recommended next moves.
   6. Emit a structured handoff that the next episode or operator can resume without reconstructing context.
@@ -28,8 +28,8 @@ source: thebasedcapital/nightcrawler
 tags: [time-boxed, budget-capped, handoff, overnight]
 related: [checkpoint-and-resume, single-ratchet]
 examples:
-  - domain: autonomous prompt tuning
-    description: Let an agent run overnight for 45 minutes at a time with a token budget and morning handoff notes.
+  - domain: supervised prompt tuning
+    description: Review a 45-minute batch with a token budget and handoff notes.
   - domain: code optimization
-    description: Schedule benchmark-driven improvement sessions that stop automatically before CI or cloud spend limits are exceeded.
+    description: Run benchmark-driven improvement sessions with externally enforced CI and cloud spend limits.
 estimated_cost: Variable; bounded by explicit time and budget limits rather than open-ended runtime.

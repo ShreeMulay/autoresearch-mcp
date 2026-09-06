@@ -261,6 +261,44 @@ describe("scaffold_experiment templates", () => {
 		expect(result.content[0].text).not.toContain("printf '%s\\n' '0'");
 	});
 
+	it("runs a generated fail-closed evaluator at the documented project-root command", async () => {
+		const recipe: CatalogItem = {
+			id: "missing-template-recipe",
+			name: "Missing Template Recipe",
+			layer: "recipe",
+			description: "Recipe fixture with no bundled templates.",
+			when_to_use: "Use only in tests.",
+			tags: ["test"],
+			related: [],
+			examples: [],
+			composes: {
+				search_strategy: "hill-climbing",
+				evaluator: "benchmark-harness",
+				execution_pattern: "single-ratchet",
+			},
+		};
+		upsertCatalogItem(recipe, "fixture-hash", "id: missing-template-recipe");
+		const result = await getTemplateHandler()({
+			recipe_id: recipe.id,
+			template_name: "eval.sh",
+		});
+
+		expect(result.isError).not.toBe(true);
+		const projectDir = await tempProjectDir();
+		await mkdir(join(projectDir, "autoresearch"));
+		const evaluatorPath = join(projectDir, "autoresearch", "eval.sh");
+		await writeFile(evaluatorPath, result.content[0].text, { mode: 0o755 });
+		const process = Bun.spawn(["autoresearch/eval.sh"], {
+			cwd: projectDir,
+			stderr: "pipe",
+			stdout: "pipe",
+		});
+		expect(await process.exited).toBe(1);
+		expect(await new Response(process.stderr).text()).toContain(
+			"placeholder evaluator",
+		);
+	});
+
 	it("uses curated templates for recipes that ship them", async () => {
 		const projectDir = await tempProjectDir();
 		const curatedEval = await readFile(
@@ -292,8 +330,15 @@ describe("scaffold_experiment templates", () => {
 		expect(programContent).toContain("- Metric Name: accuracy");
 		expect(programContent).toContain("- Target Artifact: target-prompt.md");
 		expect(programContent).toContain(
-			"- Evaluator Command: ./autoresearch/eval.sh",
+			"- Evaluator Command: autoresearch/eval.sh",
 		);
+		expect(programContent).toContain(
+			"register/log exactly one iteration 0 result with `is_baseline=true`",
+		);
+		expect(programContent).toContain(
+			"strictly greater than the best earlier score",
+		);
+		expect(programContent).not.toContain("Higher is better");
 	});
 
 	it.each([
@@ -384,6 +429,7 @@ describe("scaffold_experiment templates", () => {
 			"utf8",
 		);
 		expect(program).toContain("- Metric Direction: minimize");
+		expect(program).toContain("strictly less than the best earlier score");
 	});
 
 	it("defaults omitted metric direction to maximize in persistence and output", async () => {
@@ -453,9 +499,7 @@ describe("scaffold_experiment templates", () => {
 		expect(program).toMatch(/metric_ceilings[^\n]*accuracy[^\n]*1/);
 		expect(program).toMatch(/Stopping Conditions[^\n]*budget-exhaustion/i);
 		expect(program).toMatch(/Metric Direction[^\n]*maximize/i);
-		expect(program).toMatch(
-			/Evaluator Command[^\n]*\.\/autoresearch\/eval\.sh/i,
-		);
+		expect(program).toMatch(/Evaluator Command[^\n]*autoresearch\/eval\.sh/i);
 	});
 
 	it("restores exact overwrite contents and modes after a filesystem-shaped failure", async () => {
@@ -818,7 +862,7 @@ describe("scaffold_experiment templates", () => {
 			),
 		);
 		expect(await readFile(join(scaffoldDir, "results.tsv"), "utf8")).toBe(
-			"iteration\tscore\timproved\tchange_description\tduration_seconds\tcost_tokens\tcost_dollars\n",
+			"iteration\tscore\timproved\tis_baseline\tchange_description\tduration_seconds\tcost_tokens\tcost_dollars\n",
 		);
 
 		setScaffoldFaultInjectorForTests();

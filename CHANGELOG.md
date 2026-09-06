@@ -42,7 +42,13 @@ Planned first npm release. Versions 0.1.0 through 0.3.0 were never published to 
 - **Input bounds** — `list_experiments.limit` capped at 100, experiment results capped at 200 per fetch, search tags capped at 20 entries, cost and duration values must be nonnegative.
 - **Experiment spec surface** — `register_experiment` and `scaffold_experiment` expose and persist budget, risk policy, and metric constraints.
 - **Artifact typing and tags** — artifact type inference is shared across experiment registration/scaffolding, and catalog tags are normalized on write/filter for consistent matching.
-- **Skill synchronized with catalog** — recipe compositions in `SKILL.md` and the reference docs now match the shipped YAML catalog (the catalog is authoritative); removed a reference to a nonexistent `tree-search` strategy; the tool mapping covers all 12 tools.
+- **Skill synchronized with catalog** — recipe compositions in `SKILL.md` and the reference docs now match the shipped YAML catalog (the catalog is authoritative); removed a reference to a nonexistent `tree-search` strategy; the tool mapping covers all 11 tools.
+- **Reliable scaffold contract** — generated instructions use `autoresearch/eval.sh` from the project root, require exactly one iteration 0 baseline, and describe direction-aware strict improvement. Scaffolded `results.tsv` includes `is_baseline`.
+- **Honest literature smoke evaluation** — the bundled literature evaluator is labeled and tested as a citation-density smoke heuristic, not source validation or semantic-faithfulness evaluation.
+
+### Removed
+
+- **`log_technique_outcome`** — removed the callable tool, database write API, public type, and active documentation because no read path used the records to improve suggestions. New databases omit the table; existing databases remain compatible because startup does not destructively drop an inert historical table.
 - **CI and tests** — Bun pinned-minimum plus latest coverage, standalone installer coverage on supported Node.js 22 and 24, dynamic tarball naming, packed-install smoke for MCP `tools/list`, committed Biome config, and E2E readiness polling instead of fixed sleeps.
 
 ## [0.3.0] - 2026-05-07

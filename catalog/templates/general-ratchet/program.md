@@ -14,12 +14,12 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 ## Target
 - Primary artifact: [describe the thing being improved]
 - Supporting artifacts: [optional helper files, datasets, notes, or scripts]
-- Ground truth evaluator: `./eval.sh`
+- Ground truth evaluator: `autoresearch/eval.sh` from the project root
 
 ## Metric
-- Run `./eval.sh`
+- Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
-- Higher is better
+- Follow the scaffolded metric direction and require strict improvement
 - Define the score so it captures real progress on the task
 
 ## Problem Framing
@@ -34,7 +34,7 @@ Before making changes, fill in or infer:
 1. Inspect the current artifact
 2. Form a concrete hypothesis for improvement
 3. Apply a focused change
-4. Run `./eval.sh`
+4. Run `autoresearch/eval.sh` from the project root
 5. Keep gains, reject regressions
 6. Update your mental model of what helps
 7. Repeat

@@ -12,19 +12,19 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 ## Target
 - Primary artifact: the tests around the selected behavior
 - Supporting artifact: the implementation under test, read-only unless the evaluator proves the test exposed a real defect
-- Ground truth evaluator: `./eval.sh`
+- Ground truth evaluator: `autoresearch/eval.sh` from the project root
 
 ## Metric
-- Run `./eval.sh`
+- Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
-- Higher is better
+- Follow the scaffolded metric direction and require strict improvement
 - The score should reward tests that fail for meaningful defects and pass for correct behavior
 
 ## Core Loop
 1. Inspect the behavior, edge cases, and existing tests.
 2. Identify one untested branch, invariant, failure mode, or integration seam.
 3. Add the smallest clear test that proves the behavior.
-4. Run `./eval.sh` and any nearby targeted tests.
+4. Run `autoresearch/eval.sh` from the project root and any nearby targeted tests.
 5. Keep tests that improve signal; remove or simplify brittle assertions.
 6. Repeat with a new gap.
 
