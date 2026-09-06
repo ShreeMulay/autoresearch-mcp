@@ -36,19 +36,24 @@ Try these kinds of changes (one at a time for clear attribution):
 10. Experiment with prompt length — sometimes shorter is better
 
 ## Experiment Protocol
-1. Read the current `prompt.txt` and note the baseline score
-2. Make ONE focused change to the prompt
-3. Run `bash eval.sh` to get the new score
-4. If improved: keep the change and commit
-5. If not improved: revert to previous version
-6. Record each attempt in `results.tsv`
-7. Repeat
+1. Before making candidates, run `bash eval.sh` on the current `prompt.txt`
+2. Record that score as iteration 0 with `is_baseline=true`; there must be exactly one baseline row
+3. Make ONE focused change to the prompt
+4. Run `bash eval.sh` to get the candidate score
+5. If strictly improved: keep the change and commit
+6. If not improved: revert to the previous version
+7. Record the candidate with a later iteration number and `is_baseline=false`
+8. Repeat
 
 ## Results Logging
-After each experiment, append a line to `results.tsv`:
+`results.tsv` uses these columns:
 ```
-iteration\tscore\timproved\tchange_description
+iteration\tscore\timproved\tis_baseline\tchange_description
 ```
+
+The first data row must be iteration 0 with `improved=false` and
+`is_baseline=true`. Append candidate rows only after that baseline; candidate
+rows use `is_baseline=false`.
 
 ## NEVER STOP
 Keep iterating until the score plateaus or the budget runs out.

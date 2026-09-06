@@ -7,7 +7,17 @@ import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { z } from "zod";
 import { ExperimentSpecSchema } from "../types.js";
+
+const Migration3ExperimentSpecSchema = ExperimentSpecSchema.extend({
+	acceptance_rule: z.enum([
+		"strict-improvement",
+		"confidence-threshold",
+		"pareto",
+		"gated-constraints",
+	]),
+});
 
 function getDefaultDbPath(): string {
 	return join(
@@ -155,26 +165,20 @@ function migrateLegacyResultSemantics(db: Database): void {
 			);
 		}
 		let directionMissing = false;
-		let acceptanceChanged = false;
 		let candidate = spec;
 		if (typeof spec === "object" && spec !== null && !Array.isArray(spec)) {
 			directionMissing = !Object.hasOwn(spec, "metric_direction");
-			acceptanceChanged =
-				(spec as Record<string, unknown>).acceptance_rule !==
-				"strict-improvement";
-			candidate = {
-				...spec,
-				...(directionMissing ? { metric_direction: "maximize" } : {}),
-				acceptance_rule: "strict-improvement",
-			};
+			if (directionMissing) {
+				candidate = { ...spec, metric_direction: "maximize" };
+			}
 		}
-		const parsed = ExperimentSpecSchema.safeParse(candidate);
+		const parsed = Migration3ExperimentSpecSchema.safeParse(candidate);
 		if (!parsed.success) {
 			throw new Error(
 				`Cannot migrate experiment ${experiment.id}: invalid spec: ${parsed.error.message}`,
 			);
 		}
-		if (directionMissing || acceptanceChanged) {
+		if (directionMissing) {
 			updateSpec.run({
 				$id: experiment.id,
 				$spec: JSON.stringify(parsed.data),

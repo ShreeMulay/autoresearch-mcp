@@ -169,12 +169,6 @@ export function logExperimentResult(result: {
 		if (!experiment) {
 			throw new Error(`Experiment not found: ${result.experiment_id}`);
 		}
-		if (experiment.spec.acceptance_rule !== "strict-improvement") {
-			throw new Error(
-				`Unsupported acceptance rule: ${experiment.spec.acceptance_rule}`,
-			);
-		}
-
 		db.prepare(
 			`INSERT INTO experiment_results (experiment_id, iteration, score, improved, is_baseline, change_description, duration_seconds, cost_tokens, cost_dollars, metadata, created_at)
        VALUES ($experiment_id, $iteration, $score, $improved, $is_baseline, $change_description, $duration_seconds, $cost_tokens, $cost_dollars, $metadata, datetime('now'))

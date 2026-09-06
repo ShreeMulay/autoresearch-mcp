@@ -131,6 +131,43 @@ function createPreV3Database(
 	db.close();
 }
 
+function createVersion3StampedDatabase(
+	path: string,
+	options: { acceptanceRule: string; includeTechniqueOutcomes?: boolean },
+): void {
+	resetDb(path);
+	getDb();
+	resetDb(":memory:");
+
+	const db = new Database(path);
+	db.prepare("DELETE FROM _migrations WHERE version = 4").run();
+	db.prepare(
+		"INSERT INTO experiments (id, spec, project_path) VALUES ('legacy-v3', $spec, '/fixture')",
+	).run({ $spec: legacySpec("maximize", options.acceptanceRule) });
+
+	if (options.includeTechniqueOutcomes) {
+		db.exec(`
+			CREATE TABLE technique_outcomes (
+			  id INTEGER PRIMARY KEY AUTOINCREMENT,
+			  technique_id TEXT NOT NULL,
+			  domain TEXT NOT NULL,
+			  project_name TEXT,
+			  outcome TEXT NOT NULL CHECK(outcome IN ('success', 'partial', 'failed', 'abandoned')),
+			  notes TEXT,
+			  score_improvement REAL,
+			  total_experiments INTEGER,
+			  created_at TEXT DEFAULT (datetime('now'))
+			);
+			CREATE INDEX idx_outcomes_technique ON technique_outcomes(technique_id);
+			INSERT INTO technique_outcomes
+			  (technique_id, domain, project_name, outcome, notes, score_improvement, total_experiments, created_at)
+			VALUES
+			  ('hill-climbing', 'prompt-engineering', 'legacy-project', 'success', 'historical sentinel', 12.5, 3, '2026-01-02 03:04:05');
+		`);
+	}
+	db.close();
+}
+
 beforeEach(() => {
 	resetDb(":memory:");
 });
@@ -192,6 +229,93 @@ describe("Schema migrations", () => {
 		expect(tableNames).toContain("experiment_results");
 		expect(tableNames).not.toContain("technique_outcomes");
 		expect(tableNames).toContain("_migrations");
+	});
+
+	it("migration 4 converts a realistic version-3-stamped legacy acceptance rule", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "autoresearch-v3-acceptance-"));
+		const dbPath = join(dir, "legacy.db");
+		try {
+			createVersion3StampedDatabase(dbPath, {
+				acceptanceRule: "pareto",
+				includeTechniqueOutcomes: true,
+			});
+			const before = new Database(dbPath);
+			expect(
+				before
+					.prepare("SELECT version FROM _migrations ORDER BY version")
+					.all(),
+			).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+			expect(
+				JSON.parse(
+					(
+						before
+							.prepare("SELECT spec FROM experiments WHERE id = 'legacy-v3'")
+							.get() as { spec: string }
+					).spec,
+				).acceptance_rule,
+			).toBe("pareto");
+			before.close();
+
+			resetDb(dbPath);
+			const migrated = getDb();
+			expect(getExperiment("legacy-v3")?.spec.acceptance_rule).toBe(
+				"strict-improvement",
+			);
+			expect(
+				migrated
+					.prepare("SELECT name FROM _migrations WHERE version = 4")
+					.get(),
+			).toEqual({ name: "strict_improvement_only" });
+		} finally {
+			resetDb(":memory:");
+			await rm(dir, { force: true, recursive: true });
+		}
+	});
+
+	it("leaves a pre-existing legacy technique_outcomes table inert and untouched", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "autoresearch-v3-outcomes-"));
+		const dbPath = join(dir, "legacy.db");
+		try {
+			createVersion3StampedDatabase(dbPath, {
+				acceptanceRule: "strict-improvement",
+				includeTechniqueOutcomes: true,
+			});
+			const before = new Database(dbPath);
+			const tableSql = (
+				before
+					.prepare(
+						"SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'technique_outcomes'",
+					)
+					.get() as { sql: string }
+			).sql;
+			const historicalRow = before
+				.prepare("SELECT * FROM technique_outcomes")
+				.get();
+			before.close();
+
+			resetDb(dbPath);
+			const migrated = getDb();
+			expect(
+				migrated
+					.prepare(
+						"SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'technique_outcomes'",
+					)
+					.get(),
+			).toEqual({ sql: tableSql });
+			expect(
+				migrated.prepare("SELECT * FROM technique_outcomes").get(),
+			).toEqual(historicalRow);
+			expect(
+				migrated
+					.prepare(
+						"SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_outcomes_technique'",
+					)
+					.get(),
+			).toEqual({ name: "idx_outcomes_technique" });
+		} finally {
+			resetDb(":memory:");
+			await rm(dir, { force: true, recursive: true });
+		}
 	});
 
 	it("sets WAL journal mode", () => {
@@ -292,7 +416,7 @@ describe("populated pre-v3 migration", () => {
 		try {
 			createPreV3Database(dbPath, {
 				// Legacy specs without this field used the schema's maximize default.
-				maximize: legacySpec(undefined, "pareto"),
+				maximize: legacySpec(),
 				minimize: legacySpec("minimize"),
 			});
 			resetDb(dbPath);
@@ -305,7 +429,6 @@ describe("populated pre-v3 migration", () => {
 				).spec,
 			);
 			expect(normalizedLegacySpec.metric_direction).toBe("maximize");
-			expect(normalizedLegacySpec.acceptance_rule).toBe("strict-improvement");
 
 			expect(
 				getExperimentResults("maximize").map(
