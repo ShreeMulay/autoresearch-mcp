@@ -1,7 +1,7 @@
 # Prompt Optimization Program
 
 ## Objective
-Improve the target prompt so the evaluation score from `eval.sh` increases as much as possible.
+Improve the target prompt's evaluation score in the declared metric direction.
 
 ## Mission
 You are running a bounded ratchet on a prompt file.
@@ -20,6 +20,7 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 - Run `autoresearch/eval.sh` from the project root
 - It must print a single float to stdout
 - Follow the scaffolded metric direction and require strict improvement
+- Reject ties and regressions; retain the earlier champion
 - Optimize strictly for that score while preserving the real intent of the prompt
 
 ## Core Loop
@@ -66,7 +67,7 @@ Try changes like:
 ## Failure Handling
 - If a change hurts, back out quickly
 - If scores plateau, try a different prompt structure rather than random churn
-- If several variants tie, keep the clearer or shorter one
+- If a candidate ties the champion, revert it and retain the earlier champion
 
 ## Output Standard
 - The working tree should contain the current best prompt

@@ -1,7 +1,7 @@
 # Config Tuning Program
 
 ## Objective
-Tune the target configuration or hyperparameters to maximize the evaluation score.
+Tune the target configuration or hyperparameters to improve the evaluation score in the declared metric direction.
 
 ## Mission
 You are optimizing a configuration file rather than source code.
@@ -16,6 +16,7 @@ Use disciplined parameter changes, measure outcomes, and keep the best valid con
 - Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
 - Follow the scaffolded metric direction and require strict improvement
+- Reject ties and regressions; retain the earlier champion
 - Accept changes based on measured score, not intuition alone
 
 ## Validity Rule

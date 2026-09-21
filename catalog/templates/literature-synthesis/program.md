@@ -4,7 +4,7 @@
 Improve a literature synthesis artifact while preserving citation integrity. The bundled evaluator is only a citation-density smoke heuristic; it does not establish semantic faithfulness or source validity.
 
 ## Mission
-Use this recipe for review papers, evidence summaries, research briefs, citation-backed memos, and synthesis prompts where the evaluator rewards coverage, faithfulness, and clarity.
+Use this recipe for review papers, evidence summaries, research briefs, citation-backed memos, and synthesis prompts. Assess coverage, faithfulness, and clarity separately from the bundled citation-density smoke heuristic.
 
 ## Data Safety
 Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, clinical records, secrets, PHI-bearing prompts or model responses, or production datasets to the server, evaluator, review tooling, logs, fixtures, or CI.
@@ -18,7 +18,8 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 - Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
 - Follow the scaffolded metric direction and require strict improvement
-- The score should reward source-grounded claims, relevant coverage, and explicit uncertainty
+- Reject ties and regressions; retain the earlier champion
+- The bundled score measures citation-marker density only; source grounding and uncertainty require separate review
 
 ## Core Loop
 1. Identify the research question, audience, and decision the synthesis supports.

@@ -43,18 +43,20 @@ In any Claude Code / OpenCode session with autoresearch-mcp connected:
 # 1. Get technique recommendation
 > suggest_technique("optimize a Python coding assistant prompt")
 
-# 2. Scaffold the experiment (or use this example directly)
-> scaffold_experiment(recipe_id: "prompt-optimization", project_path: "...")
+# 2. This example already has its setup, so register it without scaffolding
+> register_experiment(project_path: ".../python-prompt-optimizer", metric_name: "eval_score", metric_direction: "maximize", target_artifact: "prompt.txt", evaluator_command: "bash eval.sh")
+-> Returns: Experiment ID: exp-id
 
-# 3. Register for tracking
-> register_experiment(project_path: "...", metric_name: "eval_score", ...)
+# 3. Before candidates, log exactly one measured baseline using the returned ID
+> log_result(experiment_id: "exp-id", iteration: 0, score: 96.0, is_baseline: true, change_description: "checked-in baseline")
 
-# 4. Before candidates, log exactly one baseline
-> log_result(experiment_id: "...", iteration: 0, score: 96.0, is_baseline: true, improved: false, ...)
-
-# 5. After each candidate, log the result without asserting improved
-> log_result(experiment_id: "...", iteration: 1, score: 97.0, ...)
+# 4. After each candidate, log its actual measured score without asserting improved
+> log_result(experiment_id: "exp-id", iteration: 1, score: <measured-score>, change_description: "candidate change")
 ```
+
+For a new project needing starter files, use `scaffold_experiment` instead. It creates files and registers the experiment; reuse its returned Experiment ID without a second `register_experiment` call. Configure its placeholder evaluator before logging any scores.
+
+`log_result` updates SQLite only. The checked-in baseline row is not automatically imported. `results.tsv` is manually maintained and is not automatically synchronized with SQLite; append candidate rows yourself if using both logs.
 
 ## Key Takeaways
 

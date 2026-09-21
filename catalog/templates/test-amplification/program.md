@@ -18,6 +18,7 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 - Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
 - Follow the scaffolded metric direction and require strict improvement
+- Reject ties and regressions; retain the earlier champion
 - The score should reward tests that fail for meaningful defects and pass for correct behavior
 
 ## Core Loop

@@ -1,7 +1,7 @@
 # Code Performance Program
 
 ## Objective
-Improve the target code so benchmark score increases while existing behavior remains correct.
+Improve the target code's benchmark score in the declared metric direction while existing behavior remains correct.
 
 ## Mission
 You are optimizing implementation performance against a measurable benchmark.
@@ -17,6 +17,7 @@ Your job is to find faster approaches without breaking correctness.
 - Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
 - Follow the scaffolded metric direction and require strict improvement
+- Reject ties and regressions; retain the earlier champion
 - Treat score changes as the decision rule for accepting or rejecting changes
 
 ## Required Safety Rule

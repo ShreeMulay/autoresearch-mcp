@@ -18,6 +18,8 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 - Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
 - Follow the scaffolded metric direction and require strict improvement
+- Reject ties and regressions; retain the earlier champion
+- The bundled evaluator reads `metrics.json`: `validation_loss` is emitted unchanged for minimize and negated for maximize; an explicit `score` is used as supplied
 - Always preserve the validation split and leakage boundaries
 
 ## Core Loop

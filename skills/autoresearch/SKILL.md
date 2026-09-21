@@ -78,12 +78,16 @@ A single number that defines success (accuracy, latency, score, cost, conversion
 
 ## Core Workflows
 
+Choose one setup path: `scaffold_experiment` creates files **and** registers the experiment; reuse its returned Experiment ID for all subsequent calls. For an existing setup, use `register_experiment` instead, without scaffolding again. Do not call both for the same run.
+
+`log_result` updates SQLite only. `results.tsv` is manually maintained; there is no automatic synchronization or import between the TSV and SQLite.
+
 ### Workflow A: Quick Optimization (5 minutes)
 
 For fast problems with clear metrics.
 
 1. **Discover**: Call `suggest_technique` with problem description
-2. **Scaffold**: Call `scaffold_experiment` with top recipe
+2. **Scaffold**: Call `scaffold_experiment` with top recipe and save the returned Experiment ID
 3. **Baseline**: Run `autoresearch/eval.sh` from the project root and log exactly one iteration 0 result with `is_baseline=true`
 4. **Iterate**: Propose mutation, re-run, compare to champion
 5. **Log**: Call `log_result` for each iteration
@@ -95,8 +99,8 @@ For important optimizations with budget for rigor.
 
 1. **Discover**: `suggest_technique` + `search_techniques` for related approaches
 2. **Get details**: `get_technique` on top 2-3 candidates
-3. **Register**: `register_experiment` with full spec
-4. **Scaffold**: `scaffold_experiment` for starter files
+3. **Scaffold**: `scaffold_experiment` with budget, risk policy, and metric controls; save the returned Experiment ID
+4. **Prepare**: Configure the scaffold evaluator before measuring the baseline
 5. **Baseline**: Run `autoresearch/eval.sh` from the project root and log exactly one iteration 0 result with `is_baseline=true`
 6. **Run ratchet**: Use bounded human/agent-driven iterations with strict champion replacement in the declared metric direction
 7. **Log all**: `log_result` every iteration; omit `improved` for candidates so the server derives it
@@ -106,7 +110,7 @@ For important optimizations with budget for rigor.
 
 For a bounded set of candidates prepared or reviewed by a human or agent.
 
-1. **Setup**: Register the experiment, scaffold, and verify the evaluator manually
+1. **Setup**: Scaffold the experiment, save its returned Experiment ID, and verify the evaluator manually
 2. **Baseline**: Log exactly one iteration 0 result with `is_baseline=true`
 3. **Review**: Evaluate bounded candidate changes under the configured approval policy
 4. **Compare**: Retain only strict improvements in the declared metric direction
@@ -119,8 +123,8 @@ For a bounded set of candidates prepared or reviewed by a human or agent.
 | Discover techniques | `suggest_technique` | AI recommends based on your constraints |
 | Deep dive | `get_technique` | Full details, templates, examples |
 | Browse catalog | `search_techniques` | Natural language search all 30 techniques |
-| Start tracking | `register_experiment` | Create experiment record in SQLite |
-| Generate files | `scaffold_experiment` | Create program.md + eval.sh starter files |
+| Track an existing setup | `register_experiment` | Alternative to scaffolding: create a record in SQLite |
+| Generate files and track | `scaffold_experiment` | Create starter files and an experiment record; return its ID |
 | Fetch template | `get_template` | Fetch a recipe's template file such as program.md or eval.sh |
 | Log iteration | `log_result` | Record score, change description, cost |
 | View progress | `get_experiment` | Experiment summary + all results |
@@ -178,8 +182,8 @@ bayesian-optimization + rubric-scorer                + champion-challenger = con
 
 ## Anti-Patterns
 
-### DON'T: Run without registering
-Always `register_experiment` before `log_result`. Orphaned results lose context.
+### DON'T: Create duplicate experiment records
+Use the ID returned by `scaffold_experiment` for `log_result`. Only use `register_experiment` instead when the setup already exists.
 
 ### DON'T: Log candidates before the baseline
 Log exactly one iteration 0 result with `is_baseline=true` before any candidate result.

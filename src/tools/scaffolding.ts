@@ -220,6 +220,9 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 					});
 					const evalContent = await buildScaffoldEvalContent(recipe.id, {
 						metricName: metric_name,
+						metricDirection: spec.metric_direction,
+						targetArtifact:
+							target_file === undefined ? undefined : targetArtifact,
 					});
 					const resultsContent = buildResultsTemplate();
 
@@ -368,17 +371,43 @@ async function buildScaffoldProgramContent(args: {
 
 async function buildScaffoldEvalContent(
 	recipeId: string,
-	args: { metricName: string },
+	args: {
+		metricName: string;
+		metricDirection: ExperimentSpec["metric_direction"];
+		targetArtifact?: string;
+	},
 ): Promise<string> {
 	const templatePath = resolveTemplatePath(recipeId, "eval.sh");
 
 	const curated = await readTemplateFileOrNull(templatePath);
 
 	if (curated !== null) {
+		const bindings: string[] = [];
+		if (recipeId === "ml-training") {
+			bindings.push(
+				`export AUTORESEARCH_METRIC_DIRECTION=${shellLiteral(args.metricDirection)}`,
+			);
+		}
+		if (
+			recipeId === "literature-synthesis" &&
+			args.targetArtifact !== undefined
+		) {
+			bindings.push(
+				`export AUTORESEARCH_TARGET_FILE=${shellLiteral(args.targetArtifact)}`,
+			);
+		}
+		if (bindings.length > 0) {
+			// Preserve the shebang; values are literal data, never shell expressions.
+			return curated.replace("\n", `\n${bindings.join("\n")}\n`);
+		}
 		return curated;
 	}
 
 	return buildFailClosedEvalTemplate(args);
+}
+
+function shellLiteral(value: string): string {
+	return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 export async function readTemplateFileOrNull(
@@ -425,7 +454,9 @@ function normalizeGeneratedProgram(
 			"",
 			"## Evaluation and Acceptance",
 			"- Run `autoresearch/eval.sh` from the project root.",
-			"- Before evaluating candidates, register/log exactly one iteration 0 result with `is_baseline=true`.",
+			"- Scaffolding already registered the experiment; use the returned Experiment ID for all log_result calls, not register_experiment.",
+			"- Before evaluating candidates, log exactly one iteration 0 result with `is_baseline=true`.",
+			"- log_result updates SQLite only; results.tsv is manually maintained and is not automatically synchronized.",
 			"- Candidate results must use later iteration numbers and must not set `is_baseline=true`.",
 			args.spec.metric_direction === "maximize"
 				? "- Accept a candidate only when its score is strictly greater than the best earlier score."
@@ -560,7 +591,9 @@ function buildProgramTemplate(args: {
 		"",
 		"## Evaluation and Acceptance",
 		"- Run `autoresearch/eval.sh` from the project root.",
-		"- Before evaluating candidates, register/log exactly one iteration 0 result with `is_baseline=true`.",
+		"- Use the Experiment ID returned by scaffold_experiment; register_experiment is an alternative for an existing setup, not an additional step.",
+		"- Before evaluating candidates, log exactly one iteration 0 result with `is_baseline=true`.",
+		"- log_result updates SQLite only; results.tsv is manually maintained and is not automatically synchronized.",
 		"- Candidate results must use later iteration numbers and must not set `is_baseline=true`.",
 		"- Accept a candidate only when it strictly improves on the best earlier score in the declared metric direction.",
 	];

@@ -196,9 +196,14 @@ export function logExperimentResult(result: {
 
 		const ordered = getAllExperimentResults(result.experiment_id);
 		const baselineResults = ordered.filter((entry) => entry.is_baseline);
-		if (baselineResults.length !== 1) {
+		if (baselineResults.length === 0) {
 			throw new Error(
 				"Before logging candidates, log exactly one earlier result with is_baseline=true",
+			);
+		}
+		if (baselineResults.length > 1) {
+			throw new Error(
+				"A baseline already exists; log candidates with is_baseline=false or correct the existing baseline at its original iteration",
 			);
 		}
 		const baseline = baselineResults[0];

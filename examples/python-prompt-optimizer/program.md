@@ -55,6 +55,13 @@ The first data row must be iteration 0 with `improved=false` and
 `is_baseline=true`. Append candidate rows only after that baseline; candidate
 rows use `is_baseline=false`.
 
+`results.tsv` is manually maintained. `log_result` updates SQLite only; it does
+not import or automatically synchronize this file. When tracking this existing
+setup, call `register_experiment` once and reuse its returned Experiment ID.
+For a new setup created by `scaffold_experiment`, reuse the ID returned by that
+call instead; scaffolding already registers the experiment. Log the baseline
+in SQLite before candidates even if it is already present in the TSV.
+
 ## NEVER STOP
 Keep iterating until the score plateaus or the budget runs out.
 The goal is to find the highest-scoring prompt through systematic experimentation.

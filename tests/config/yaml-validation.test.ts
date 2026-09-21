@@ -231,7 +231,7 @@ test("dependency remediation floors remain blocking package contracts", async ()
 		"@hono/node-server": "1.19.15",
 		"body-parser": "2.3.0",
 		"fast-uri": "3.1.6",
-		hono: "4.12.34",
+		hono: "4.13.5",
 		"ip-address": "10.4.0",
 		qs: "6.16.0",
 	});

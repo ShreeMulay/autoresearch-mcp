@@ -75,8 +75,12 @@ describe("server-derived result integrity", () => {
 				score: 3,
 				is_baseline: true,
 			}),
-		).toThrow(/baseline/i);
+		).toThrow(
+			"A baseline already exists; log candidates with is_baseline=false or correct the existing baseline at its original iteration",
+		);
 		expect(getExperimentResults("baseline-order")).toHaveLength(1);
+		log({ experiment_id: "baseline-order", iteration: 2, score: 3 });
+		expect(getExperimentResults("baseline-order")[1].improved).toBe(true);
 	});
 
 	it.each([

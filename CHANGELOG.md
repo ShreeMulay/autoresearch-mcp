@@ -35,6 +35,10 @@ Planned first npm release. Versions 0.1.0 through 0.3.0 were never published to 
 
 ### Changed
 
+- **Acceptance-rule migration v4** — existing experiment specs are narrowed to `strict-improvement` during startup without dropping records or historical tables. Migration v3 retains its legacy default when `acceptance_rule` is omitted and preserves legacy rule values until v4 performs the cutover.
+- **Evaluator bindings** — scaffolded ML evaluators honor metric direction for validation loss; literature evaluators bind the selected target as literal data rather than silently reading `synthesis.md`. Standalone evaluator defaults remain compatible.
+- **Tracking workflow** — scaffolding returns an auto-registered Experiment ID. Documentation now treats separate registration as an alternative and explicitly distinguishes SQLite result logging from manually maintained TSV files.
+
 - **Default database path** moved out of the package tree to the user data directory (`$XDG_DATA_HOME/autoresearch-mcp/autoresearch.db` or `~/.local/share/autoresearch-mcp/autoresearch.db`). `AUTORESEARCH_DB_PATH` still overrides it and `:memory:` is honored.
 - **`get_server_info`** returns `{version, catalog, db_path}` and reports the database path actually opened by the active connection.
 - **Search semantics** — a non-empty query that sanitizes to zero FTS tokens (for example `C++` or `AND`) returns an unsupported-query message instead of dumping the whole catalog. An empty query still lists everything.

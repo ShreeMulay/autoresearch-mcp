@@ -177,7 +177,30 @@ describe("MCP Server E2E", () => {
 			})}\n`,
 		);
 		const response = await waitForJsonRpcResponse(3);
-		expect(response.error ?? response.result).toBeDefined();
-		expect(JSON.stringify(response)).toMatch(/invalid|status|validation/i);
+		// SDK mcp.js catches InvalidParams and returns a tool error result.
+		expect(response.error).toBeUndefined();
+		expect(response.result).toMatchObject({ isError: true });
+		const result = response.result as {
+			content: Array<{ type: string; text: string }>;
+		};
+		expect(result.content[0].type).toBe("text");
+		expect(result.content[0].text).toContain(
+			"Input validation error: Invalid arguments for tool list_experiments",
+		);
+		expect(result.content[0].text).toContain("status");
+		expect(result.content[0].text).toContain("not-a-status");
+
+		child.stdin?.write(
+			`${JSON.stringify({
+				jsonrpc: "2.0",
+				id: 4,
+				method: "tools/call",
+				params: { name: "list_experiments", arguments: { status: "running" } },
+			})}\n`,
+		);
+		const valid = await waitForJsonRpcResponse(4);
+		expect(valid.error).toBeUndefined();
+		expect(valid.result).toBeDefined();
+		expect(valid.result).not.toMatchObject({ isError: true });
 	});
 });

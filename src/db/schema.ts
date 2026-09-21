@@ -11,12 +11,14 @@ import { z } from "zod";
 import { ExperimentSpecSchema } from "../types.js";
 
 const Migration3ExperimentSpecSchema = ExperimentSpecSchema.extend({
-	acceptance_rule: z.enum([
-		"strict-improvement",
-		"confidence-threshold",
-		"pareto",
-		"gated-constraints",
-	]),
+	acceptance_rule: z
+		.enum([
+			"strict-improvement",
+			"confidence-threshold",
+			"pareto",
+			"gated-constraints",
+		])
+		.default("strict-improvement"),
 });
 
 function getDefaultDbPath(): string {

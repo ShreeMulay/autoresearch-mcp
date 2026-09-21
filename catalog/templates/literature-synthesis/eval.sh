@@ -6,7 +6,8 @@ set -euo pipefail
 # citation markers per word. This does not validate sources, claims, or semantic
 # faithfulness. Replace it with a project-specific evaluator for those properties.
 
-TARGET_FILE="${1:-synthesis.md}"
+# Explicit arguments override the scaffold binding; standalone defaults to synthesis.md.
+TARGET_FILE="${1:-${AUTORESEARCH_TARGET_FILE:-synthesis.md}}"
 
 if [[ -f "$TARGET_FILE" ]]; then
   AUTORESEARCH_TARGET_FILE="$TARGET_FILE" bun -e '

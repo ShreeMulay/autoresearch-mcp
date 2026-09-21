@@ -119,6 +119,8 @@ A good `program.md` should explain:
 
 `autoresearch/eval.sh` should be run from the project root, be deterministic when possible, and print a single finite float to stdout. Whether higher or lower is better is defined by `metric_direction`. Log exactly one iteration 0 result with `is_baseline=true` before candidates.
 
+`scaffold_experiment` also registers the experiment: reuse its returned ID for tracking. `register_experiment` is the alternative for existing setups, not a second step after scaffolding. `log_result` writes to SQLite only; `results.tsv` is manually maintained, with no automatic synchronization.
+
 ## Ratchet execution phases
 
 When contributing toward autonomous execution, keep the `run_ratchet` path phased and explicit:

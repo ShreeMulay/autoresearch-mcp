@@ -410,115 +410,218 @@ describe("concurrent migration initialization", () => {
 });
 
 describe("populated pre-v3 migration", () => {
-	it("derives baselines, improvements, and aggregates before accepting new results", async () => {
-		const dir = await mkdtemp(join(tmpdir(), "autoresearch-populated-v2-"));
+	it("rolls back a failed v4 cutover, preserves v3 results, and retries cleanly", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "autoresearch-v4-retry-"));
 		const dbPath = join(dir, "legacy.db");
 		try {
 			createPreV3Database(dbPath, {
-				// Legacy specs without this field used the schema's maximize default.
-				maximize: legacySpec(),
-				minimize: legacySpec("minimize"),
+				maximize: legacySpec(undefined, "pareto"),
+				minimize: legacySpec("minimize", "confidence-threshold"),
 			});
+			const fixture = new Database(dbPath);
+			fixture.exec(`CREATE TRIGGER reject_cutover BEFORE UPDATE OF spec ON experiments
+				WHEN OLD.id = 'minimize' AND json_extract(NEW.spec, '$.acceptance_rule') = 'strict-improvement'
+				BEGIN SELECT RAISE(ABORT, 'fixture rejects v4'); END;`);
+			fixture.close();
 			resetDb(dbPath);
-			const migrated = getDb();
-			const normalizedLegacySpec = JSON.parse(
-				(
+			expect(() => getDb()).toThrow("fixture rejects v4");
+			resetDb(":memory:");
+			const failed = new Database(dbPath);
+			expect(
+				failed
+					.prepare("SELECT version FROM _migrations ORDER BY version")
+					.all(),
+			).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+			const rows = failed
+				.prepare("SELECT * FROM experiment_results ORDER BY id")
+				.all();
+			const aggregates = failed
+				.prepare(
+					"SELECT id, best_score, total_iterations, successful_iterations, cost_tokens, cost_dollars, cost_wall_seconds FROM experiments ORDER BY id",
+				)
+				.all();
+			expect(
+				JSON.parse(
+					(
+						failed
+							.prepare("SELECT spec FROM experiments WHERE id = 'maximize'")
+							.get() as { spec: string }
+					).spec,
+				),
+			).toMatchObject({
+				metric_direction: "maximize",
+				acceptance_rule: "pareto",
+			});
+			failed.exec("DROP TRIGGER reject_cutover");
+			failed.close();
+			for (const _attempt of [0, 1]) {
+				resetDb(dbPath);
+				const migrated = getDb();
+				expect(
 					migrated
-						.prepare("SELECT spec FROM experiments WHERE id = 'maximize'")
-						.get() as { spec: string }
-				).spec,
-			);
-			expect(normalizedLegacySpec.metric_direction).toBe("maximize");
-
-			expect(
-				getExperimentResults("maximize").map(
-					({ iteration, score, is_baseline, improved }) => ({
-						iteration,
-						score,
-						is_baseline,
-						improved,
-					}),
-				),
-			).toEqual([
-				{ iteration: 0, score: 10, is_baseline: true, improved: false },
-				{ iteration: 1, score: 12, is_baseline: false, improved: true },
-				{ iteration: 2, score: 15, is_baseline: false, improved: true },
-				{ iteration: 3, score: 12, is_baseline: false, improved: false },
-			]);
-			expect(
-				getExperimentResults("minimize").map(
-					({ iteration, score, is_baseline, improved }) => ({
-						iteration,
-						score,
-						is_baseline,
-						improved,
-					}),
-				),
-			).toEqual([
-				{ iteration: 0, score: 100, is_baseline: true, improved: false },
-				{ iteration: 1, score: 90, is_baseline: false, improved: true },
-				{ iteration: 2, score: 95, is_baseline: false, improved: false },
-				{ iteration: 3, score: 80, is_baseline: false, improved: true },
-			]);
-			expect(getExperiment("maximize")).toMatchObject({
-				best_score: 15,
-				total_iterations: 4,
-				successful_iterations: 2,
-				cost_tokens: 60,
-				cost_dollars: 0.6,
-				cost_wall_seconds: 6,
-			});
-			expect(getExperiment("minimize")).toMatchObject({
-				best_score: 80,
-				total_iterations: 4,
-				successful_iterations: 2,
-				cost_tokens: 15,
-				cost_dollars: 0.15,
-				cost_wall_seconds: 1.5,
-			});
-			expect(getExperiment("empty")).toMatchObject({
-				best_score: undefined,
-				total_iterations: 0,
-				successful_iterations: 0,
-				cost_tokens: 0,
-				cost_dollars: 0,
-				cost_wall_seconds: 0,
-			});
-
-			logExperimentResult({
-				experiment_id: "maximize",
-				iteration: 4,
-				score: 16,
-				change_description: "post-migration",
-				cost_tokens: 40,
-				cost_dollars: 0.4,
-				duration_seconds: 4,
-			});
-			expect(getExperiment("maximize")).toMatchObject({
-				best_score: 16,
-				total_iterations: 5,
-				successful_iterations: 3,
-				cost_tokens: 100,
-				cost_dollars: 1,
-				cost_wall_seconds: 10,
-			});
-
-			resetDb(dbPath);
-			const reopened = getDb();
-			expect(
-				(
-					reopened
+						.prepare("SELECT * FROM experiment_results ORDER BY id")
+						.all(),
+				).toEqual(rows);
+				expect(
+					migrated
 						.prepare(
-							"SELECT COUNT(*) AS count FROM _migrations WHERE version = 3",
+							"SELECT id, best_score, total_iterations, successful_iterations, cost_tokens, cost_dollars, cost_wall_seconds FROM experiments ORDER BY id",
 						)
-						.get() as { count: number }
-				).count,
-			).toBe(1);
+						.all(),
+				).toEqual(aggregates);
+				expect(getExperiment("maximize")?.spec.acceptance_rule).toBe(
+					"strict-improvement",
+				);
+				expect(getExperiment("minimize")?.spec.acceptance_rule).toBe(
+					"strict-improvement",
+				);
+				expect(
+					migrated
+						.prepare(
+							"SELECT COUNT(*) AS count FROM _migrations WHERE version = 4",
+						)
+						.get(),
+				).toEqual({ count: 1 });
+			}
 		} finally {
 			resetDb(":memory:");
 			await rm(dir, { force: true, recursive: true });
 		}
 	});
+	it.each([undefined, "pareto", "confidence-threshold", "gated-constraints"])(
+		"preserves results and aggregates across v3/v4 with acceptance rule %p",
+		async (acceptanceRule) => {
+			const dir = await mkdtemp(join(tmpdir(), "autoresearch-populated-v2-"));
+			const dbPath = join(dir, "legacy.db");
+			try {
+				const withAcceptance = (direction?: "maximize" | "minimize") => {
+					const spec = JSON.parse(legacySpec(direction));
+					// JSON.stringify omits the undefined field for the historical-default fixture.
+					spec.acceptance_rule = acceptanceRule;
+					return JSON.stringify(spec);
+				};
+				createPreV3Database(dbPath, {
+					// Legacy specs without this field used the schema's maximize default.
+					maximize: withAcceptance(),
+					minimize: withAcceptance("minimize"),
+					empty: withAcceptance("maximize"),
+				});
+				resetDb(dbPath);
+				const migrated = getDb();
+				const normalizedLegacySpec = JSON.parse(
+					(
+						migrated
+							.prepare("SELECT spec FROM experiments WHERE id = 'maximize'")
+							.get() as { spec: string }
+					).spec,
+				);
+				expect(normalizedLegacySpec.metric_direction).toBe("maximize");
+				expect(normalizedLegacySpec.acceptance_rule).toBe("strict-improvement");
+				expect(getExperiment("minimize")?.spec.acceptance_rule).toBe(
+					"strict-improvement",
+				);
+
+				expect(
+					getExperimentResults("maximize").map(
+						({ iteration, score, is_baseline, improved }) => ({
+							iteration,
+							score,
+							is_baseline,
+							improved,
+						}),
+					),
+				).toEqual([
+					{ iteration: 0, score: 10, is_baseline: true, improved: false },
+					{ iteration: 1, score: 12, is_baseline: false, improved: true },
+					{ iteration: 2, score: 15, is_baseline: false, improved: true },
+					{ iteration: 3, score: 12, is_baseline: false, improved: false },
+				]);
+				expect(
+					getExperimentResults("minimize").map(
+						({ iteration, score, is_baseline, improved }) => ({
+							iteration,
+							score,
+							is_baseline,
+							improved,
+						}),
+					),
+				).toEqual([
+					{ iteration: 0, score: 100, is_baseline: true, improved: false },
+					{ iteration: 1, score: 90, is_baseline: false, improved: true },
+					{ iteration: 2, score: 95, is_baseline: false, improved: false },
+					{ iteration: 3, score: 80, is_baseline: false, improved: true },
+				]);
+				expect(getExperiment("maximize")).toMatchObject({
+					best_score: 15,
+					total_iterations: 4,
+					successful_iterations: 2,
+					cost_tokens: 60,
+					cost_dollars: 0.6,
+					cost_wall_seconds: 6,
+				});
+				expect(getExperiment("minimize")).toMatchObject({
+					best_score: 80,
+					total_iterations: 4,
+					successful_iterations: 2,
+					cost_tokens: 15,
+					cost_dollars: 0.15,
+					cost_wall_seconds: 1.5,
+				});
+				expect(getExperiment("empty")).toMatchObject({
+					best_score: undefined,
+					total_iterations: 0,
+					successful_iterations: 0,
+					cost_tokens: 0,
+					cost_dollars: 0,
+					cost_wall_seconds: 0,
+				});
+
+				logExperimentResult({
+					experiment_id: "maximize",
+					iteration: 4,
+					score: 16,
+					change_description: "post-migration",
+					cost_tokens: 40,
+					cost_dollars: 0.4,
+					duration_seconds: 4,
+				});
+				expect(getExperiment("maximize")).toMatchObject({
+					best_score: 16,
+					total_iterations: 5,
+					successful_iterations: 3,
+					cost_tokens: 100,
+					cost_dollars: 1,
+					cost_wall_seconds: 10,
+				});
+
+				const experimentBeforeReopen = getExperiment("maximize");
+				const resultsBeforeReopen = getExperimentResults("maximize");
+				resetDb(dbPath);
+				const reopened = getDb();
+				expect(getExperiment("maximize")).toEqual(experimentBeforeReopen);
+				expect(getExperimentResults("maximize")).toEqual(resultsBeforeReopen);
+				expect(
+					reopened
+						.prepare(
+							"SELECT COUNT(*) AS count FROM _migrations WHERE version = 4",
+						)
+						.get(),
+				).toEqual({ count: 1 });
+				expect(
+					(
+						reopened
+							.prepare(
+								"SELECT COUNT(*) AS count FROM _migrations WHERE version = 3",
+							)
+							.get() as { count: number }
+					).count,
+				).toBe(1);
+			} finally {
+				resetDb(":memory:");
+				await rm(dir, { force: true, recursive: true });
+			}
+		},
+	);
 
 	it("rolls back v3 rather than guessing an invalid metric direction", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "autoresearch-invalid-v2-"));

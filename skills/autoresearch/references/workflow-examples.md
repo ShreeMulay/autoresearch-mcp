@@ -2,6 +2,8 @@
 
 Three end-to-end walkthroughs showing how to use autoresearch in practice.
 
+Each walkthrough uses `scaffold_experiment`, which creates files and registers the experiment in one call. All later calls reuse the returned Experiment ID. `register_experiment` is an alternative for an existing setup, not an additional step. `log_result` updates SQLite only; `results.tsv` is manually maintained with no automatic synchronization.
+
 ## Example 1: Optimizing a Prompt (15 minutes)
 
 All examples below use synthetic, non-sensitive data. Do not supply PHI, patient identifiers, PHI-bearing prompts or model responses, clinical records, secrets, or production datasets to the server or its surrounding tooling.
@@ -26,7 +28,7 @@ User: "I need to optimize my synthetic product-review summarization prompt."
 → Returns: Full recipe details, composition, templates
 ```
 
-### Step 3: Scaffold and Register
+### Step 3: Scaffold (automatically registers)
 ```
 → AI: Call scaffold_experiment(
   recipe_id="prompt-optimization",
@@ -68,7 +70,7 @@ The baseline log seeds `best_score` until an improved iteration lands.
 → AI: Call update_experiment(exp-123e4567, status="completed")
 ```
 
-**Result**: Compression savings improved 42% → 55%. Best prompt: iteration 4.
+**Illustrative result**: Compression savings improved 42% → 55%. Best prompt: iteration 3.
 
 ---
 
@@ -88,7 +90,7 @@ The baseline log seeds `best_score` until an improved iteration lands.
 → Returns: code-performance recipe recommended
 ```
 
-### Phase 2: Scaffold and Register
+### Phase 2: Scaffold (automatically registers)
 ```
 → AI: Call scaffold_experiment(
   recipe_id="code-performance",
@@ -154,7 +156,7 @@ Iteration 7: Optimize JSON serialization → Score: 190ms, improved: false
 → Returns: ml-training recipe (hill-climbing + benchmark-harness + single-ratchet)
 ```
 
-### Scaffold and Register
+### Scaffold (automatically registers)
 ```
 → AI: Call scaffold_experiment(
   recipe_id="ml-training",

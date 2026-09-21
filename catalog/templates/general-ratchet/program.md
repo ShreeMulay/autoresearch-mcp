@@ -1,7 +1,7 @@
 # General Ratchet Program
 
 ## Objective
-Improve the target artifact to maximize the evaluation score for any domain with a measurable metric.
+Improve the target artifact's evaluation score in the declared metric direction for any domain with a measurable metric.
 
 ## Mission
 This is the most customizable ratchet template.
@@ -20,6 +20,7 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 - Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
 - Follow the scaffolded metric direction and require strict improvement
+- Reject ties and regressions; retain the earlier champion
 - Define the score so it captures real progress on the task
 
 ## Problem Framing
