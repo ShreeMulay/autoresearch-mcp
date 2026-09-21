@@ -35,6 +35,10 @@ Planned first npm release. Versions 0.1.0 through 0.3.0 were never published to 
 
 ### Changed
 
+- **Acceptance-rule migration v4** — existing experiment specs are narrowed to `strict-improvement` during startup without dropping records or historical tables. Migration v3 retains its legacy default when `acceptance_rule` is omitted and preserves legacy rule values until v4 performs the cutover.
+- **Evaluator bindings** — scaffolded ML evaluators honor metric direction for validation loss; literature evaluators bind the selected target as literal data rather than silently reading `synthesis.md`. Standalone evaluator defaults remain compatible.
+- **Tracking workflow** — scaffolding returns an auto-registered Experiment ID. Documentation now treats separate registration as an alternative and explicitly distinguishes SQLite result logging from manually maintained TSV files.
+
 - **Default database path** moved out of the package tree to the user data directory (`$XDG_DATA_HOME/autoresearch-mcp/autoresearch.db` or `~/.local/share/autoresearch-mcp/autoresearch.db`). `AUTORESEARCH_DB_PATH` still overrides it and `:memory:` is honored.
 - **`get_server_info`** returns `{version, catalog, db_path}` and reports the database path actually opened by the active connection.
 - **Search semantics** — a non-empty query that sanitizes to zero FTS tokens (for example `C++` or `AND`) returns an unsupported-query message instead of dumping the whole catalog. An empty query still lists everything.
@@ -42,7 +46,13 @@ Planned first npm release. Versions 0.1.0 through 0.3.0 were never published to 
 - **Input bounds** — `list_experiments.limit` capped at 100, experiment results capped at 200 per fetch, search tags capped at 20 entries, cost and duration values must be nonnegative.
 - **Experiment spec surface** — `register_experiment` and `scaffold_experiment` expose and persist budget, risk policy, and metric constraints.
 - **Artifact typing and tags** — artifact type inference is shared across experiment registration/scaffolding, and catalog tags are normalized on write/filter for consistent matching.
-- **Skill synchronized with catalog** — recipe compositions in `SKILL.md` and the reference docs now match the shipped YAML catalog (the catalog is authoritative); removed a reference to a nonexistent `tree-search` strategy; the tool mapping covers all 12 tools.
+- **Skill synchronized with catalog** — recipe compositions in `SKILL.md` and the reference docs now match the shipped YAML catalog (the catalog is authoritative); removed a reference to a nonexistent `tree-search` strategy; the tool mapping covers all 11 tools.
+- **Reliable scaffold contract** — generated instructions use `autoresearch/eval.sh` from the project root, require exactly one iteration 0 baseline, and describe direction-aware strict improvement. Scaffolded `results.tsv` includes `is_baseline`.
+- **Honest literature smoke evaluation** — the bundled literature evaluator is labeled and tested as a citation-density smoke heuristic, not source validation or semantic-faithfulness evaluation.
+
+### Removed
+
+- **`log_technique_outcome`** — removed the callable tool, database write API, public type, and active documentation because no read path used the records to improve suggestions. New databases omit the table; existing databases remain compatible because startup does not destructively drop an inert historical table.
 - **CI and tests** — Bun pinned-minimum plus latest coverage, standalone installer coverage on supported Node.js 22 and 24, dynamic tarball naming, packed-install smoke for MCP `tools/list`, committed Biome config, and E2E readiness polling instead of fixed sleeps.
 
 ## [0.3.0] - 2026-05-07

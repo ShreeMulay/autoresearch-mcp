@@ -264,7 +264,7 @@ env -i HOME="$WORK_DIR/home" PATH="$PATH" npm_config_userconfig=/dev/null npm_co
 node - "$WORK_DIR/consumer-graph.json" <<'EOF'
 const fs = require("node:fs");
 const graph = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-const floors = { "@hono/node-server": "1.19.15", "body-parser": "2.3.0", "fast-uri": "3.1.3", "hono": "4.12.34", "ip-address": "10.4.0", "qs": "6.16.0" };
+const floors = { "@hono/node-server": "1.19.15", "body-parser": "2.3.0", "fast-uri": "3.1.3", "hono": "4.13.5", "ip-address": "10.4.0", "qs": "6.16.0" };
 const found = new Map(Object.keys(floors).map((name) => [name, []]));
 const visit = (node) => {
   for (const [name, dependency] of Object.entries(node.dependencies ?? {})) {
@@ -337,7 +337,7 @@ const [path, version] = process.argv.slice(2);
 const messages = fs.readFileSync(path, "utf8").trim().split("\n").map(JSON.parse);
 const byId = new Map(messages.filter((message) => message.id).map((message) => [message.id, message]));
 if (byId.get(1)?.result?.serverInfo?.version !== version) throw new Error("initialize server version mismatch");
-const expectedTools = ["get_experiment", "get_server_info", "get_technique", "get_template", "list_experiments", "log_result", "log_technique_outcome", "register_experiment", "scaffold_experiment", "search_techniques", "suggest_technique", "update_experiment"];
+const expectedTools = ["get_experiment", "get_server_info", "get_technique", "get_template", "list_experiments", "log_result", "register_experiment", "scaffold_experiment", "search_techniques", "suggest_technique", "update_experiment"];
 const actualTools = (byId.get(2)?.result?.tools ?? []).map((tool) => tool.name).sort();
 if (JSON.stringify(actualTools) !== JSON.stringify(expectedTools)) throw new Error(`tool list mismatch: ${actualTools.join(",")}`);
 const serverInfo = JSON.parse(byId.get(3)?.result?.content?.[0]?.text ?? "null");

@@ -6,7 +6,7 @@ description: |
   after interruption without losing progress or context. The saved state typically
   includes artifacts, metrics, history, pending actions, and runtime budget usage.
   It is a foundational durability pattern for long-running optimization loops,
-  autonomous agents, and failure-prone environments.
+  human/agent-driven sessions and failure-prone environments.
 when_to_use: |
   - Experiments run long enough that crashes, restarts, or operator handoffs are likely.
   - You need resilience across agent sessions, machines, or scheduling windows.

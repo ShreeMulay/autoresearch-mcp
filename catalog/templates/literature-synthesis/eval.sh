@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Replace this with the project-specific literature synthesis evaluator.
-# Contract: print exactly one numeric score to stdout; higher is better.
-# Suggested signals: citation coverage, source-claim faithfulness, rubric score,
-# missing-evidence penalties, and clarity/structure checks.
+# Citation-density smoke heuristic only.
+# Contract: print exactly one finite numeric score to stdout; higher means more
+# citation markers per word. This does not validate sources, claims, or semantic
+# faithfulness. Replace it with a project-specific evaluator for those properties.
 
-TARGET_FILE="${1:-synthesis.md}"
+# Explicit arguments override the scaffold binding; standalone defaults to synthesis.md.
+TARGET_FILE="${1:-${AUTORESEARCH_TARGET_FILE:-synthesis.md}}"
 
 if [[ -f "$TARGET_FILE" ]]; then
   AUTORESEARCH_TARGET_FILE="$TARGET_FILE" bun -e '
@@ -19,5 +20,5 @@ if [[ -f "$TARGET_FILE" ]]; then
   exit 0
 fi
 
-printf '%s\n' 'autoresearch: configure a literature synthesis evaluator for this project' >&2
+printf '%s\n' 'autoresearch: configure the citation-density smoke heuristic target for this project' >&2
 exit 1

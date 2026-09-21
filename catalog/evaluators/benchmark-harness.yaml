@@ -9,7 +9,7 @@ description: |
 when_to_use: |
   - Use when you already have a reliable script, benchmark, or test harness that outputs a single numeric metric.
   - Use when you need reproducible comparisons across many iterations without evaluator drift.
-  - Use when evaluation must be cheap enough to run continuously in CI, sweeps, or autonomous loops.
+  - Use when evaluation must be cheap enough to run repeatedly in CI or supervised sweeps.
   - Use when objective ground truth exists and subjective judging would only add noise.
 when_not_to_use: |
   - Do not use when quality is primarily aesthetic, creative, or preference-based.

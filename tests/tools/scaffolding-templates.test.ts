@@ -19,10 +19,15 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getExperiment, listExperiments } from "../../src/db/experiments.js";
+import {
+	getExperiment,
+	getExperimentResults,
+	listExperiments,
+} from "../../src/db/experiments.js";
 import { loadCatalog } from "../../src/db/load-catalog.js";
 import { resetDb } from "../../src/db/schema.js";
 import { upsertCatalogItem } from "../../src/db/techniques.js";
+import { registerExperimentTools } from "../../src/tools/experiments.js";
 import {
 	type ScaffoldFaultPoint,
 	registerScaffoldingTools,
@@ -142,6 +147,38 @@ async function pathExists(path: string): Promise<boolean> {
 	}
 }
 
+function resultToolHandler() {
+	type Handler = (args: {
+		experiment_id: string;
+		iteration: number;
+		score: number;
+		is_baseline: boolean;
+		change_description: string;
+	}) => Promise<ToolResult>;
+	let handler: Handler | undefined;
+	registerExperimentTools({
+		tool: (...args: unknown[]) => {
+			if (args[0] === "log_result") handler = args[3] as Handler;
+		},
+	} as McpServer);
+	if (!handler) throw new Error("log_result missing");
+	return handler;
+}
+
+async function executeDocumentedEvaluator(projectDir: string, command: string) {
+	const proc = Bun.spawn([command], {
+		cwd: projectDir,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const [exitCode, stdout, stderr] = await Promise.all([
+		proc.exited,
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+	]);
+	return { exitCode, stdout, stderr };
+}
+
 function experimentIdFromResult(result: ToolResult): string {
 	const match = result.content[0]?.text.match(/Experiment ID: `([^`]+)`/);
 	if (!match) {
@@ -232,6 +269,152 @@ describe("scaffold_experiment hardening", () => {
 });
 
 describe("scaffold_experiment templates", () => {
+	it.each(["minimize", "maximize"] as const)(
+		"runs the scaffolded ML %s lifecycle against improving and worsening loss",
+		async (direction) => {
+			const projectDir = await tempProjectDir();
+			const response = await scaffoldHandler()({
+				recipe_id: "ml-training",
+				project_path: projectDir,
+				metric_name: "validation_loss",
+				metric_direction: direction,
+				target_file: "train.py",
+				overwrite: false,
+			});
+			expect(response.isError).not.toBe(true);
+			const id = experimentIdFromResult(response);
+			expect(listExperiments().map((experiment) => experiment.id)).toEqual([
+				id,
+			]);
+			const experiment = getExperiment(id);
+			expect(experiment?.spec.metric_direction).toBe(direction);
+			const command = experiment?.spec.evaluator_command ?? "";
+			expect(command).toBe("autoresearch/eval.sh");
+			const program = await readFile(
+				join(projectDir, "autoresearch/program.md"),
+				"utf8",
+			);
+			expect(program).toContain(`Run \`${command}\` from the project root`);
+			const tsv = await readFile(
+				join(projectDir, "autoresearch/results.tsv"),
+				"utf8",
+			);
+			const log = resultToolHandler();
+			for (const [iteration, loss] of [2, 1, 3].entries()) {
+				await writeFile(
+					join(projectDir, "metrics.json"),
+					JSON.stringify({ validation_loss: loss }),
+				);
+				const evaluated = await executeDocumentedEvaluator(projectDir, command);
+				expect(evaluated.exitCode).toBe(0);
+				const score = Number(evaluated.stdout.trim());
+				expect(score).toBe(direction === "minimize" ? loss : -loss);
+				const result = await log({
+					experiment_id: id,
+					iteration,
+					score,
+					is_baseline: iteration === 0,
+					change_description: `fixture loss ${loss}`,
+				});
+				expect(result.isError).not.toBe(true);
+			}
+			expect(
+				getExperimentResults(id).map(({ is_baseline, improved }) => ({
+					is_baseline,
+					improved,
+				})),
+			).toEqual([
+				{ is_baseline: true, improved: false },
+				{ is_baseline: false, improved: true },
+				{ is_baseline: false, improved: false },
+			]);
+			expect(getExperiment(id)?.best_score).toBe(
+				direction === "minimize" ? 1 : -1,
+			);
+			expect(
+				await readFile(join(projectDir, "autoresearch/results.tsv"), "utf8"),
+			).toBe(tsv);
+		},
+	);
+
+	it("binds a literal literature target and never falls back to synthesis.md", async () => {
+		const projectDir = await tempProjectDir();
+		// Shell metacharacters are filename data, not commands to execute.
+		const target = `review 'quoted' "double" $DOLLAR ; & (draft).md`;
+		await writeFile(
+			join(projectDir, "synthesis.md"),
+			"Wrong document [Marker 2026].",
+		);
+		await writeFile(
+			join(projectDir, target),
+			"Selected document without citations.",
+		);
+		const response = await scaffoldHandler()({
+			recipe_id: "literature-synthesis",
+			project_path: projectDir,
+			target_file: target,
+			metric_name: "citation_density",
+			overwrite: false,
+		});
+		expect(response.isError).not.toBe(true);
+		const id = experimentIdFromResult(response);
+		expect(listExperiments().map((experiment) => experiment.id)).toEqual([id]);
+		const command = getExperiment(id)?.spec.evaluator_command ?? "";
+		expect(
+			await readFile(join(projectDir, "autoresearch/program.md"), "utf8"),
+		).toContain(`Run \`${command}\` from the project root`);
+		const log = resultToolHandler();
+		for (const iteration of [0, 1]) {
+			if (iteration === 1)
+				await writeFile(
+					join(projectDir, target),
+					"Selected document [Marker 2026].",
+				);
+			const evaluated = await executeDocumentedEvaluator(projectDir, command);
+			expect(evaluated.exitCode).toBe(0);
+			expect(Number(evaluated.stdout.trim())).toBe(iteration);
+			expect(
+				(
+					await log({
+						experiment_id: id,
+						iteration,
+						score: Number(evaluated.stdout.trim()),
+						is_baseline: iteration === 0,
+						change_description: "citation fixture",
+					})
+				).isError,
+			).not.toBe(true);
+		}
+		expect(getExperimentResults(id).map(({ improved }) => improved)).toEqual([
+			false,
+			true,
+		]);
+		await rm(join(projectDir, target));
+		const missing = await executeDocumentedEvaluator(projectDir, command);
+		expect(missing.exitCode).toBe(1);
+		expect(missing.stdout).toBe("");
+	});
+
+	it("executes the actual scaffold placeholder from the project root and fails closed", async () => {
+		const projectDir = await tempProjectDir();
+		const response = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "accuracy",
+			target_file: "prompt.md",
+			overwrite: false,
+		});
+		expect(response.isError).not.toBe(true);
+		const experiment = getExperiment(experimentIdFromResult(response));
+		expect(listExperiments()).toHaveLength(1);
+		const evaluated = await executeDocumentedEvaluator(
+			projectDir,
+			experiment?.spec.evaluator_command ?? "",
+		);
+		expect(evaluated.exitCode).toBe(1);
+		expect(evaluated.stdout).toBe("");
+		expect(evaluated.stderr).toContain("configure a prompt evaluator");
+	});
 	it("returns a fail-closed eval template when no curated eval template exists", async () => {
 		const recipe: CatalogItem = {
 			id: "missing-template-recipe",
@@ -259,6 +442,44 @@ describe("scaffold_experiment templates", () => {
 		expect(result.content[0].text).toContain("placeholder evaluator");
 		expect(result.content[0].text).toContain("exit 1");
 		expect(result.content[0].text).not.toContain("printf '%s\\n' '0'");
+	});
+
+	it("runs a generated fail-closed evaluator at the documented project-root command", async () => {
+		const recipe: CatalogItem = {
+			id: "missing-template-recipe",
+			name: "Missing Template Recipe",
+			layer: "recipe",
+			description: "Recipe fixture with no bundled templates.",
+			when_to_use: "Use only in tests.",
+			tags: ["test"],
+			related: [],
+			examples: [],
+			composes: {
+				search_strategy: "hill-climbing",
+				evaluator: "benchmark-harness",
+				execution_pattern: "single-ratchet",
+			},
+		};
+		upsertCatalogItem(recipe, "fixture-hash", "id: missing-template-recipe");
+		const result = await getTemplateHandler()({
+			recipe_id: recipe.id,
+			template_name: "eval.sh",
+		});
+
+		expect(result.isError).not.toBe(true);
+		const projectDir = await tempProjectDir();
+		await mkdir(join(projectDir, "autoresearch"));
+		const evaluatorPath = join(projectDir, "autoresearch", "eval.sh");
+		await writeFile(evaluatorPath, result.content[0].text, { mode: 0o755 });
+		const process = Bun.spawn(["autoresearch/eval.sh"], {
+			cwd: projectDir,
+			stderr: "pipe",
+			stdout: "pipe",
+		});
+		expect(await process.exited).toBe(1);
+		expect(await new Response(process.stderr).text()).toContain(
+			"placeholder evaluator",
+		);
 	});
 
 	it("uses curated templates for recipes that ship them", async () => {
@@ -292,8 +513,15 @@ describe("scaffold_experiment templates", () => {
 		expect(programContent).toContain("- Metric Name: accuracy");
 		expect(programContent).toContain("- Target Artifact: target-prompt.md");
 		expect(programContent).toContain(
-			"- Evaluator Command: ./autoresearch/eval.sh",
+			"- Evaluator Command: autoresearch/eval.sh",
 		);
+		expect(programContent).toContain(
+			"log exactly one iteration 0 result with `is_baseline=true`",
+		);
+		expect(programContent).toContain(
+			"strictly greater than the best earlier score",
+		);
+		expect(programContent).not.toContain("Higher is better");
 	});
 
 	it.each([
@@ -325,7 +553,9 @@ describe("scaffold_experiment templates", () => {
 			"utf8",
 		);
 
-		expect(evalContent).toBe(curatedEval);
+		expect(evalContent).toContain(
+			curatedEval.slice(curatedEval.indexOf("\n") + 1),
+		);
 		expect(programContent).toContain(heading);
 		expect(programContent).toContain("## Experiment Metadata");
 		expect(programContent).toContain("- Metric Name: score");
@@ -384,6 +614,7 @@ describe("scaffold_experiment templates", () => {
 			"utf8",
 		);
 		expect(program).toContain("- Metric Direction: minimize");
+		expect(program).toContain("strictly less than the best earlier score");
 	});
 
 	it("defaults omitted metric direction to maximize in persistence and output", async () => {
@@ -453,9 +684,7 @@ describe("scaffold_experiment templates", () => {
 		expect(program).toMatch(/metric_ceilings[^\n]*accuracy[^\n]*1/);
 		expect(program).toMatch(/Stopping Conditions[^\n]*budget-exhaustion/i);
 		expect(program).toMatch(/Metric Direction[^\n]*maximize/i);
-		expect(program).toMatch(
-			/Evaluator Command[^\n]*\.\/autoresearch\/eval\.sh/i,
-		);
+		expect(program).toMatch(/Evaluator Command[^\n]*autoresearch\/eval\.sh/i);
 	});
 
 	it("restores exact overwrite contents and modes after a filesystem-shaped failure", async () => {
@@ -818,7 +1047,7 @@ describe("scaffold_experiment templates", () => {
 			),
 		);
 		expect(await readFile(join(scaffoldDir, "results.tsv"), "utf8")).toBe(
-			"iteration\tscore\timproved\tchange_description\tduration_seconds\tcost_tokens\tcost_dollars\n",
+			"iteration\tscore\timproved\tis_baseline\tchange_description\tduration_seconds\tcost_tokens\tcost_dollars\n",
 		);
 
 		setScaffoldFaultInjectorForTests();

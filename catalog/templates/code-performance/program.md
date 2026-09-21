@@ -1,7 +1,7 @@
 # Code Performance Program
 
 ## Objective
-Improve the target code so benchmark score increases while existing behavior remains correct.
+Improve the target code's benchmark score in the declared metric direction while existing behavior remains correct.
 
 ## Mission
 You are optimizing implementation performance against a measurable benchmark.
@@ -14,9 +14,10 @@ Your job is to find faster approaches without breaking correctness.
 - Keep the benchmark runner and test suite as the ground truth
 
 ## Metric
-- Run `./eval.sh`
+- Run `autoresearch/eval.sh` from the project root
 - It prints a single float to stdout
-- Higher is better
+- Follow the scaffolded metric direction and require strict improvement
+- Reject ties and regressions; retain the earlier champion
 - Treat score changes as the decision rule for accepting or rejecting changes
 
 ## Required Safety Rule
@@ -30,7 +31,7 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 2. Form a hypothesis about the main bottleneck
 3. Change the implementation
 4. Run tests if available
-5. Run `./eval.sh`
+5. Run `autoresearch/eval.sh` from the project root
 6. Keep the change only if correctness holds and score improves
 7. Repeat
 

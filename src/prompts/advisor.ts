@@ -20,7 +20,7 @@ export function registerPrompts(mcp: McpServer): void {
 					role: "user",
 					content: {
 						type: "text",
-						text: `I want to apply the autoresearch pattern (Karpathy's autonomous experiment loop) to the following problem:
+						text: `I want to apply the autoresearch pattern (a bounded human/agent-driven experiment loop) to the following problem:
 
 ${problem}
 
@@ -102,7 +102,10 @@ The program.md should include:
 3. What the agent must NOT modify (evaluation, data prep)
 4. Strategy hints for the agent (what kinds of changes to try)
 5. Danger zones and anti-patterns to avoid
-6. The instruction "NEVER STOP" (continue until budget exhausted)
+6. Run \`autoresearch/eval.sh\` from the project root
+7. Log exactly one iteration 0 baseline with \`is_baseline=true\` before candidates
+8. Require strict improvement in the declared metric direction
+9. The instruction "NEVER STOP" (continue until budget exhausted)
 
 Follow the Karpathy convention: program.md is the human-agent interface, written by the human, read by the agent. It should be a lightweight "skill" definition.`,
 					},

@@ -7,7 +7,19 @@ import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { z } from "zod";
 import { ExperimentSpecSchema } from "../types.js";
+
+const Migration3ExperimentSpecSchema = ExperimentSpecSchema.extend({
+	acceptance_rule: z
+		.enum([
+			"strict-improvement",
+			"confidence-threshold",
+			"pareto",
+			"gated-constraints",
+		])
+		.default("strict-improvement"),
+});
 
 function getDefaultDbPath(): string {
 	return join(
@@ -110,24 +122,10 @@ const INITIAL_SCHEMA_SQL = `
     created_at TEXT DEFAULT (datetime('now'))
   );
 
-  -- Technique outcomes (meta-learning)
-  CREATE TABLE IF NOT EXISTS technique_outcomes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    technique_id TEXT NOT NULL,
-    domain TEXT NOT NULL,
-    project_name TEXT,
-    outcome TEXT NOT NULL CHECK(outcome IN ('success', 'partial', 'failed', 'abandoned')),
-    notes TEXT,
-    score_improvement REAL,
-    total_experiments INTEGER,
-    created_at TEXT DEFAULT (datetime('now'))
-  );
-
   -- Indexes
   CREATE INDEX IF NOT EXISTS idx_catalog_layer ON catalog_items(layer);
   CREATE INDEX IF NOT EXISTS idx_experiments_status ON experiments(status);
   CREATE INDEX IF NOT EXISTS idx_results_experiment ON experiment_results(experiment_id);
-  CREATE INDEX IF NOT EXISTS idx_outcomes_technique ON technique_outcomes(technique_id);
 `;
 
 // ============================================================
@@ -176,7 +174,7 @@ function migrateLegacyResultSemantics(db: Database): void {
 				candidate = { ...spec, metric_direction: "maximize" };
 			}
 		}
-		const parsed = ExperimentSpecSchema.safeParse(candidate);
+		const parsed = Migration3ExperimentSpecSchema.safeParse(candidate);
 		if (!parsed.success) {
 			throw new Error(
 				`Cannot migrate experiment ${experiment.id}: invalid spec: ${parsed.error.message}`,
@@ -263,6 +261,38 @@ function migrateLegacyResultSemantics(db: Database): void {
 	`);
 }
 
+function migrateAcceptanceRuleCutover(db: Database): void {
+	const experiments = db
+		.prepare("SELECT id, spec FROM experiments ORDER BY id")
+		.all() as { id: string; spec: string }[];
+	const update = db.prepare(
+		"UPDATE experiments SET spec = $spec WHERE id = $id",
+	);
+	for (const experiment of experiments) {
+		let spec: unknown;
+		try {
+			spec = JSON.parse(experiment.spec);
+		} catch {
+			throw new Error(
+				`Cannot migrate experiment ${experiment.id}: invalid spec JSON`,
+			);
+		}
+		if (typeof spec !== "object" || spec === null || Array.isArray(spec)) {
+			throw new Error(
+				`Cannot migrate experiment ${experiment.id}: invalid spec`,
+			);
+		}
+		const migrated = { ...spec, acceptance_rule: "strict-improvement" };
+		const parsed = ExperimentSpecSchema.safeParse(migrated);
+		if (!parsed.success) {
+			throw new Error(
+				`Cannot migrate experiment ${experiment.id}: ${parsed.error.message}`,
+			);
+		}
+		update.run({ $id: experiment.id, $spec: JSON.stringify(parsed.data) });
+	}
+}
+
 const MIGRATIONS: Migration[] = [
 	{
 		version: 1,
@@ -329,6 +359,12 @@ const MIGRATIONS: Migration[] = [
       ADD COLUMN is_baseline INTEGER NOT NULL DEFAULT 0;
     `,
 		apply: migrateLegacyResultSemantics,
+	},
+	{
+		version: 4,
+		name: "strict_improvement_only",
+		sql: "",
+		apply: migrateAcceptanceRuleCutover,
 	},
 ];
 

@@ -38,7 +38,7 @@ export async function main(
 	// Register all components
 	// Phase 0.5: Discovery
 	registerDiscoveryTools(server);
-	// Phase 1: Experiment management + scaffolding + meta
+	// Phase 1: Experiment management + scaffolding + server metadata
 	registerExperimentTools(server);
 	registerScaffoldingTools(server);
 	registerMetaTools(server);

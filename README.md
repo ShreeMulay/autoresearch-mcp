@@ -8,7 +8,7 @@ Autoresearch is a simple but powerful pattern popularized by [Andrej Karpathy's 
 
 In Karpathy's framing, that can mean roughly 12 experiments per hour and around 100 overnight. The important idea is broader than any one implementation: if you have a measurable metric, you can ratchet toward better results.
 
-`autoresearch-mcp` packages that pattern as an MCP server so any compatible AI client can discover techniques, scaffold experiments, track iterations, and accumulate meta-learning across projects.
+`autoresearch-mcp` packages that pattern as an MCP server so any compatible AI client can discover techniques, scaffold experiments, and track bounded human/agent-driven iterations. It does not execute an autonomous optimization loop.
 
 This project is inspired by Karpathy's work, but it is not affiliated with his project and no code was copied.
 
@@ -131,11 +131,10 @@ Edit artifact -> Run evaluator -> Score improved? -> Yes: Keep -> Repeat
 The server gives your agent the pieces needed to run that loop in a structured way:
 
 1. Pick a technique or recipe.
-2. Scaffold an experiment with a program and evaluator harness.
-3. Run iterations against a measurable metric.
+2. Scaffold an experiment with a program and evaluator harness; this also registers it. Save the returned Experiment ID.
+3. Using that ID, log exactly one iteration 0 baseline with `is_baseline=true`, then run candidate iterations against a measurable metric.
 4. Keep improvements, discard regressions.
-5. Track costs, timing, and outcomes.
-6. Reuse what works across future projects.
+5. Track costs, timing, and experiment history.
 
 ## Technique Catalog
 
@@ -193,22 +192,21 @@ Recipes compose a strategy, evaluator, and execution pattern into a ready-to-use
 
 ## MCP Tools
 
-The server exposes 12 MCP tools.
+The server exposes 11 MCP tools.
 
 | Tool | Description |
 | --- | --- |
 | `search_techniques` | Search the catalog by query, or list all techniques when the query is empty. |
 | `get_technique` | Return full details for a technique by ID. |
 | `suggest_technique` | Describe a problem and get a recommended approach. |
-| `register_experiment` | Create a tracked experiment record. |
+| `register_experiment` | Create a tracked record for an existing setup, as an alternative to scaffolding. |
 | `update_experiment` | Update experiment status with automatic timestamps. |
 | `log_result` | Log an iteration result with score, time, token, and dollar tracking. |
 | `get_experiment` | Retrieve experiment details and optional iteration history. |
 | `list_experiments` | List experiments filtered by status or project. |
-| `scaffold_experiment` | Generate `program.md`, `eval.sh`, and `results.tsv` from a recipe. |
+| `scaffold_experiment` | Generate `program.md`, `eval.sh`, and `results.tsv` from a recipe and return the auto-registered Experiment ID. |
 | `get_template` | Return a recipe template file. |
 | `get_server_info` | Return server version, catalog stats, and the active database path. |
-| `log_technique_outcome` | Record what worked for cross-project meta-learning. |
 
 ## Usage Examples
 
@@ -222,10 +220,11 @@ Agent calls: suggest_technique(problem: "optimize chatbot prompt with eval set")
    (hill-climbing + llm-as-judge + single-ratchet)
 
 Agent calls: scaffold_experiment(recipe_id: "prompt-optimization", ...)
--> Creates: autoresearch/program.md, eval.sh, results.tsv
+-> Creates: autoresearch/program.md, autoresearch/eval.sh, autoresearch/results.tsv
+-> Returns: Experiment ID (reuse this for every tracking call)
 
-You: "Run the ratchet loop"
-Agent: reads program.md, edits prompt, runs eval.sh, logs results...
+You: "Help me run a bounded ratchet iteration"
+Agent: reads program.md, configures the evaluator, logs the baseline using the returned ID, proposes an edit, runs `autoresearch/eval.sh` from the project root, and logs the result under human supervision.
 
 After 10 iterations: Score improved from 62 to 94 (+52%)
 ```
@@ -236,22 +235,23 @@ If you prefer explicit tool orchestration, the lifecycle looks like this:
 
 ```text
 1. suggest_technique(problem="reduce API latency without hurting quality")
-2. scaffold_experiment(recipe_id="code-performance", project_path="/repo", metric_name="requests/sec")
-3. update_experiment(experiment_id="...", status="running")
-4. log_result(iteration=0, score=1100, is_baseline=true, improved=false, change_description="baseline before candidate changes")
-5. log_result(iteration=1, score=1180, change_description="inlined hot path")
-6. log_result(iteration=2, score=1165, change_description="added extra serialization")
-7. get_experiment(experiment_id="...", include_results=true)
-8. log_technique_outcome(technique_id="code-performance", domain="backend", outcome="success")
+2. scaffold_experiment(recipe_id="code-performance", project_path="/repo", metric_name="requests/sec") -> Experiment ID: exp-id
+3. update_experiment(experiment_id="exp-id", status="running")
+4. log_result(experiment_id="exp-id", iteration=0, score=1100, is_baseline=true, improved=false, change_description="baseline before candidate changes")
+5. log_result(experiment_id="exp-id", iteration=1, score=1180, change_description="inlined hot path")
+6. log_result(experiment_id="exp-id", iteration=2, score=1165, change_description="added extra serialization")
+7. get_experiment(experiment_id="exp-id", include_results=true)
 ```
 
-Log exactly one baseline before candidate iterations. Baselines are never improvements, so the explicit `improved=false` assertion matches the server-derived result. For candidates, omit `improved` as above and let the server derive it; if supplied, the assertion must match the server-derived result.
+Log exactly one iteration 0 baseline before candidate iterations. Baselines are never improvements, so the explicit `improved=false` assertion matches the server-derived result. For candidates, omit `improved` as above and let the server derive it; if supplied, the assertion must match the server-derived result. Run the scaffold evaluator as `autoresearch/eval.sh` from the project root.
 
 After scaffolding, your agent gets a working starting point:
 
 - `autoresearch/program.md` for the loop instructions
 - `autoresearch/eval.sh` for the evaluation harness
-- `autoresearch/results.tsv` for iteration history
+- `autoresearch/results.tsv` for manually maintained iteration history
+
+Do not call `register_experiment` after scaffolding: the experiment is already registered. For existing setups that do not need generated files, use `register_experiment` instead and reuse its returned ID. `log_result` updates SQLite only; it does not append to, import, or automatically synchronize `results.tsv`.
 
 ## Example Domains
 
@@ -328,7 +328,7 @@ If your client expects a single executable command, point it at the same Bun-bas
 - Phase 4: Docker sandbox for safer code execution and isolated experiments
 - Phase 5: Nightcrawler-style bounded episodes for longer autonomous optimization runs
 
-The direction is simple: start with trustworthy building blocks, then expand toward increasingly autonomous experiment execution.
+These are future roadmap items, not current product capabilities. The current release is limited to discovery, scaffolding, and tracked human/agent-driven iteration.
 
 ## Inspired By
 

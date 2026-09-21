@@ -1,11 +1,18 @@
 import { describe, expect, it } from "bun:test";
 import {
+	AcceptanceRule,
 	BudgetSchema,
 	CatalogItemSchema,
 	ConstraintsSchema,
 } from "../../src/types.js";
 
 describe("budget and constraint numeric integrity", () => {
+	it("supports only strict-improvement acceptance", () => {
+		expect(AcceptanceRule.parse("strict-improvement")).toBe(
+			"strict-improvement",
+		);
+		expect(AcceptanceRule.safeParse("pareto").success).toBe(false);
+	});
 	it.each([
 		{ max_iterations: -1 },
 		{ max_iterations: 1.5 },

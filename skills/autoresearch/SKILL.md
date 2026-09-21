@@ -1,6 +1,6 @@
 ---
 name: autoresearch
-description: Select and apply autoresearch techniques for optimization problems. Use when user says 'optimize', 'improve this', 'run experiments', 'find best technique', 'ratchet', or when tackling prompt engineering, code optimization, ML training, or workflow tuning. Complements the autoresearch-mcp server (tools + state) with methodology, decision trees, and composition rules. Guides the AI through the full ratchet loop from problem identification to meta-learning.
+description: Select and apply autoresearch techniques for optimization problems. Use when user says 'optimize', 'improve this', 'run experiments', 'find best technique', 'ratchet', or when tackling prompt engineering, code optimization, ML training, or workflow tuning. Complements the autoresearch-mcp server (tools + state) with methodology, decision trees, and composition rules for bounded human/agent-driven iteration.
 ---
 
 # Autoresearch Skill
@@ -31,12 +31,10 @@ Use synthetic, non-sensitive data only; examples and tests use synthetic data on
 Autoresearch is iterative improvement against a repeatable evaluation. The loop is:
 
 ```
-Discover → Suggest → Scaffold → Run → Evaluate → Log → Ratchet → Meta-Learn
+Discover → Suggest → Scaffold → Baseline → Run → Evaluate → Log → Ratchet
 ```
 
 **Ratchet principle**: Only keep improvements. The best-so-far (champion) is replaced only by something measurably better.
-
-**Meta-learning principle**: Every experiment teaches us what works in which domain. Log outcomes so future suggestions improve.
 
 ## Decision Tree: Which Technique?
 
@@ -62,7 +60,7 @@ A single number that defines success (accuracy, latency, score, cost, conversion
 
 ### Q4: Human in the loop?
 
-- **Fully autonomous** → Any ratchet pattern with automated evaluator
+- **Automated evaluator with human/agent orchestration** → Any compatible ratchet pattern
 - **Human approves each change** → human-approval-gate evaluator
 - **Human judges final output** → llm-as-judge or pairwise-comparison
 
@@ -80,13 +78,17 @@ A single number that defines success (accuracy, latency, score, cost, conversion
 
 ## Core Workflows
 
+Choose one setup path: `scaffold_experiment` creates files **and** registers the experiment; reuse its returned Experiment ID for all subsequent calls. For an existing setup, use `register_experiment` instead, without scaffolding again. Do not call both for the same run.
+
+`log_result` updates SQLite only. `results.tsv` is manually maintained; there is no automatic synchronization or import between the TSV and SQLite.
+
 ### Workflow A: Quick Optimization (5 minutes)
 
 For fast problems with clear metrics.
 
 1. **Discover**: Call `suggest_technique` with problem description
-2. **Scaffold**: Call `scaffold_experiment` with top recipe
-3. **Run**: Execute evaluator, observe score
+2. **Scaffold**: Call `scaffold_experiment` with top recipe and save the returned Experiment ID
+3. **Baseline**: Run `autoresearch/eval.sh` from the project root and log exactly one iteration 0 result with `is_baseline=true`
 4. **Iterate**: Propose mutation, re-run, compare to champion
 5. **Log**: Call `log_result` for each iteration
 6. **Decide**: 3-5 iterations, pick best
@@ -97,22 +99,22 @@ For important optimizations with budget for rigor.
 
 1. **Discover**: `suggest_technique` + `search_techniques` for related approaches
 2. **Get details**: `get_technique` on top 2-3 candidates
-3. **Register**: `register_experiment` with full spec
-4. **Scaffold**: `scaffold_experiment` for starter files
-5. **Run ratchet**: 10-20 iterations, strict champion replacement
-6. **Log all**: `log_result` every iteration
-7. **Analyze**: `get_experiment` with include_results=true
-8. **Meta-learn**: `log_technique_outcome` with what worked
+3. **Scaffold**: `scaffold_experiment` with budget, risk policy, and metric controls; save the returned Experiment ID
+4. **Prepare**: Configure the scaffold evaluator before measuring the baseline
+5. **Baseline**: Run `autoresearch/eval.sh` from the project root and log exactly one iteration 0 result with `is_baseline=true`
+6. **Run ratchet**: Use bounded human/agent-driven iterations with strict champion replacement in the declared metric direction
+7. **Log all**: `log_result` every iteration; omit `improved` for candidates so the server derives it
+8. **Analyze**: `get_experiment` with include_results=true
 
-### Workflow C: Overnight Batch (autonomous)
+### Workflow C: Human-Supervised Batch
 
-For problems that can run while you sleep.
+For a bounded set of candidates prepared or reviewed by a human or agent.
 
-1. **Setup**: Register experiment, scaffold, verify evaluator works manually
-2. **Script**: Write loop script that mutates, evaluates, logs, sleeps
-3. **Run**: Start script, walk away
-4. **Morning**: `get_experiment` to see results, `list_experiments` for overview
-5. **Integrate**: Apply best result, `update_experiment` to completed
+1. **Setup**: Scaffold the experiment, save its returned Experiment ID, and verify the evaluator manually
+2. **Baseline**: Log exactly one iteration 0 result with `is_baseline=true`
+3. **Review**: Evaluate bounded candidate changes under the configured approval policy
+4. **Compare**: Retain only strict improvements in the declared metric direction
+5. **Integrate**: Review the best result and use `update_experiment` when complete
 
 ## MCP Tool Mapping
 
@@ -121,16 +123,14 @@ For problems that can run while you sleep.
 | Discover techniques | `suggest_technique` | AI recommends based on your constraints |
 | Deep dive | `get_technique` | Full details, templates, examples |
 | Browse catalog | `search_techniques` | Natural language search all 30 techniques |
-| Start tracking | `register_experiment` | Create experiment record in SQLite |
-| Generate files | `scaffold_experiment` | Create program.md + eval.sh starter files |
+| Track an existing setup | `register_experiment` | Alternative to scaffolding: create a record in SQLite |
+| Generate files and track | `scaffold_experiment` | Create starter files and an experiment record; return its ID |
 | Fetch template | `get_template` | Fetch a recipe's template file such as program.md or eval.sh |
 | Log iteration | `log_result` | Record score, change description, cost |
 | View progress | `get_experiment` | Experiment summary + all results |
 | Browse runs | `list_experiments` | All experiments, filter by status/project |
 | Update status | `update_experiment` | Mark running/paused/completed/failed |
 | Diagnostics | `get_server_info` | Version, catalog stats, and DB path for diagnostics/handshake |
-| Meta-learning | `log_technique_outcome` | "This technique worked in this domain" |
-| Self-improve | `log_technique_outcome` + `search_techniques` | Build outcome database for better suggestions |
 
 ## Composition Rules
 
@@ -182,8 +182,11 @@ bayesian-optimization + rubric-scorer                + champion-challenger = con
 
 ## Anti-Patterns
 
-### DON'T: Run without registering
-Always `register_experiment` before `log_result`. Orphaned results lose context.
+### DON'T: Create duplicate experiment records
+Use the ID returned by `scaffold_experiment` for `log_result`. Only use `register_experiment` instead when the setup already exists.
+
+### DON'T: Log candidates before the baseline
+Log exactly one iteration 0 result with `is_baseline=true` before any candidate result.
 
 ### DON'T: Skip evaluation
 "Looks better" is not a metric. Define the evaluator before running the loop.
@@ -196,9 +199,6 @@ Use bounded-episode or checkpoint-and-resume. Power outages happen.
 
 ### DON'T: Ignore cost
 Define token/dollar budgets and stopping conditions in the experiment spec, then enforce them in the agent loop. `register_experiment` tracks core fields; call `log_result` with cost data and review `list_experiments` to see cumulative spend.
-
-### DON'T: Forget meta-learning
-After every experiment, `log_technique_outcome`. This is how the system gets smarter.
 
 ### DON'T: Over-optimize early
 Start with general-ratchet recipe. Only build custom compositions after 3+ experiments in the same domain.
