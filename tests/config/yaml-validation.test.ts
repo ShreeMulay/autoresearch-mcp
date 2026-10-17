@@ -168,15 +168,32 @@ test("Forgejo Actions exposes one PR-only terminal CI context", async () => {
 		"runs-on": string;
 		needs: string[];
 		if: string;
-		container: { image: string };
+		"timeout-minutes": number;
 		steps: Array<Record<string, unknown>>;
 	};
-	expect(terminal["runs-on"]).toBe("forgejo-ci");
+	expect(Object.keys(terminal).sort()).toEqual(
+		["if", "needs", "runs-on", "steps", "timeout-minutes"].sort(),
+	);
+	expect(terminal["runs-on"]).toBe("forgejo-ci-light");
+	expect(terminal["timeout-minutes"]).toBe(5);
+	expect(terminal).not.toHaveProperty("container");
+	expect(terminal).not.toHaveProperty("services");
 	expect(terminal.needs).toEqual(["bun", "node22", "node24", "package_smoke"]);
 	expect(terminal.if).toBe("always()");
-	expect(terminal.container.image).toBe(images.bun);
 	expect(terminal.steps).toHaveLength(1);
+	expect(Object.keys(terminal.steps[0] ?? {}).sort()).toEqual([
+		"name",
+		"run",
+		"shell",
+	]);
+	expect(terminal.steps[0]?.shell).toBe("sh");
 	const terminalRun = String(terminal.steps[0]?.run);
+	// Exact lines: only needs results are read; no checkout, tools, or repository content.
+	expect(terminalRun.trim().split("\n")).toEqual(
+		["bun", "node22", "node24", "package_smoke"].map(
+			(dependency) => `test "\${{ needs.${dependency}.result }}" = success`,
+		),
+	);
 	for (const dependency of ["bun", "node22", "node24", "package_smoke"]) {
 		expect(terminalRun).toContain(`needs.${dependency}.result`);
 		expect(terminalRun).toContain("success");
