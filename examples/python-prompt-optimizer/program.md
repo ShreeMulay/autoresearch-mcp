@@ -62,7 +62,9 @@ For a new setup created by `scaffold_experiment`, reuse the ID returned by that
 call instead; scaffolding already registers the experiment. Log the baseline
 in SQLite before candidates even if it is already present in the TSV.
 
-## NEVER STOP
-Keep iterating until the score plateaus or the budget runs out.
+## Continuation Rule
+These are operator instructions; the server records budgets and approvals but does not enforce them.
+- Before repeated execution, record a finite bound (iterations, time, tokens, or dollars).
+- Persist through plateaus and early wins, but stop when the budget is exhausted, when human approval is required, on any evaluator or safety failure, or when the supervisor says stop.
 The goal is to find the highest-scoring prompt through systematic experimentation.
 Each experiment teaches you something about what the evaluator values.

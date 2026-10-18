@@ -14,6 +14,7 @@ import {
 	rm,
 	stat,
 	symlink,
+	utimes,
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -29,6 +30,8 @@ import { resetDb } from "../../src/db/schema.js";
 import { upsertCatalogItem } from "../../src/db/techniques.js";
 import { registerExperimentTools } from "../../src/tools/experiments.js";
 import {
+	APPROVAL_CONTROL_LINE,
+	ENFORCEMENT_CONTROL_LINE,
 	type ScaffoldFaultPoint,
 	registerScaffoldingTools,
 	resolveTemplatePath,
@@ -162,6 +165,22 @@ function resultToolHandler() {
 		},
 	} as McpServer);
 	if (!handler) throw new Error("log_result missing");
+	return handler;
+}
+
+function updateExperimentHandler() {
+	type Handler = (args: {
+		experiment_id: string;
+		status?: "scaffolded" | "running" | "paused" | "completed" | "failed";
+		notes?: string;
+	}) => Promise<ToolResult>;
+	let handler: Handler | undefined;
+	registerExperimentTools({
+		tool: (...args: unknown[]) => {
+			if (args[0] === "update_experiment") handler = args[3] as Handler;
+		},
+	} as unknown as McpServer);
+	if (!handler) throw new Error("update_experiment missing");
 	return handler;
 }
 
@@ -425,6 +444,7 @@ describe("scaffold_experiment templates", () => {
 			tags: ["test"],
 			related: [],
 			examples: [],
+			requires_gpu: false,
 			composes: {
 				search_strategy: "hill-climbing",
 				evaluator: "benchmark-harness",
@@ -454,6 +474,7 @@ describe("scaffold_experiment templates", () => {
 			tags: ["test"],
 			related: [],
 			examples: [],
+			requires_gpu: false,
 			composes: {
 				search_strategy: "hill-climbing",
 				evaluator: "benchmark-harness",
@@ -671,23 +692,57 @@ describe("scaffold_experiment templates", () => {
 			"utf8",
 		);
 		expect((program.match(/^## Run Controls$/gm) ?? []).length).toBe(1);
-		expect(program).toContain("Use the fixed synthetic fixture only.");
-		expect(program).toMatch(/max_iterations[^\n]*4/);
-		expect(program).toMatch(/max_time_seconds[^\n]*120/);
-		expect(program).toMatch(/max_tokens[^\n]*5000/);
-		expect(program).toMatch(/max_dollars[^\n]*1\.25/);
-		expect(program).toMatch(/sandbox_only[^\n]*true/);
-		expect(program).toMatch(/requires_approval[^\n]*true/);
-		expect(program).toMatch(/network_denied[^\n]*true/);
-		expect(program).toMatch(/secrets_denied[^\n]*true/);
-		expect(program).toMatch(/metric_floors[^\n]*accuracy[^\n]*0\.8/);
-		expect(program).toMatch(/metric_ceilings[^\n]*accuracy[^\n]*1/);
-		expect(program).toMatch(/Stopping Conditions[^\n]*budget-exhaustion/i);
-		expect(program).toMatch(/Metric Direction[^\n]*maximize/i);
-		expect(program).toMatch(/Evaluator Command[^\n]*autoresearch\/eval\.sh/i);
+		const lines = program.split("\n");
+		const controls = lines.slice(lines.indexOf("## Run Controls"));
+		expect(controls).toEqual([
+			"## Run Controls",
+			"- Custom Instructions: Use the fixed synthetic fixture only.",
+			"- Budget:",
+			"  - max_iterations: 4",
+			"  - max_time_seconds: 120",
+			"  - max_tokens: 5000",
+			"  - max_dollars: 1.25",
+			"- Risk Policy:",
+			"  - sandbox_only: true",
+			"  - requires_approval: true",
+			"  - network_denied: true",
+			"  - secrets_denied: true",
+			"- Constraints:",
+			'  - metric_floors: {"accuracy":0.8}',
+			'  - metric_ceilings: {"accuracy":1}',
+			"- Stopping Conditions: budget-exhaustion",
+			"- Metric Direction: maximize",
+			"- Evaluator Command: autoresearch/eval.sh",
+			APPROVAL_CONTROL_LINE,
+			ENFORCEMENT_CONTROL_LINE,
+			"",
+		]);
+		expect(APPROVAL_CONTROL_LINE).toBe(
+			"- Approval Required: obtain explicit human approval before each candidate evaluation and before accepting any candidate; stop and wait if approval is not given.",
+		);
+		expect(ENFORCEMENT_CONTROL_LINE).toBe(
+			"- Enforcement: budgets, approval, and stopping conditions are operator-enforced instructions; the server records them but does not stop the run.",
+		);
 	});
 
-	it("restores exact overwrite contents and modes after a filesystem-shaped failure", async () => {
+	it("omits the approval instruction when approval is not required", async () => {
+		const projectDir = await tempProjectDir();
+		const result = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "accuracy",
+			overwrite: false,
+		});
+		expect(result.isError).not.toBe(true);
+		const lines = (
+			await readFile(join(projectDir, "autoresearch", "program.md"), "utf8")
+		).split("\n");
+		expect(lines).toContain("  - requires_approval: false");
+		expect(lines).not.toContain(APPROVAL_CONTROL_LINE);
+		expect(lines).toContain(ENFORCEMENT_CONTROL_LINE);
+	});
+
+	it("rejects overwrite in preflight when a destination is a directory and preserves original files and modes", async () => {
 		const projectDir = await tempProjectDir();
 		const scaffoldDir = join(projectDir, "autoresearch");
 		await mkdir(scaffoldDir);
@@ -708,6 +763,10 @@ describe("scaffold_experiment templates", () => {
 		});
 
 		expect(result.isError).toBe(true);
+		expect(result.content[0]?.text).toContain(
+			`Scaffold destination is not a regular file: ${resultsPath}`,
+		);
+		expect(await scaffoldResidue(projectDir)).toEqual([]);
 		expect(await readFile(programPath, "utf8")).toBe("original program\n");
 		expect(await readFile(evalPath, "utf8")).toBe("original evaluator\n");
 		expect((await stat(programPath)).mode & 0o777).toBe(0o640);
@@ -1128,5 +1187,85 @@ describe("scaffold_experiment templates", () => {
 		expect((await first).isError).not.toBe(true);
 		expect(listExperiments()).toHaveLength(1);
 		expect(await scaffoldResidue(projectDir)).toEqual([]);
+	});
+
+	it("reports a pre-existing lock path, age, and manual recovery guidance without deleting it", async () => {
+		const projectDir = await tempProjectDir();
+		const lockPath = join(projectDir, ".autoresearch-scaffold.lock");
+		await mkdir(lockPath);
+		const past = new Date(Date.now() - 90_000);
+		await utimes(lockPath, past, past);
+
+		const result = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "score",
+			overwrite: false,
+		});
+
+		expect(result.isError).toBe(true);
+		const text = result.content[0]?.text ?? "";
+		expect(text).toContain("already in progress");
+		expect(text).toContain(`Lock path: ${lockPath}`);
+		const age = text.match(/Lock age: (\d+) seconds/);
+		expect(age).not.toBeNull();
+		expect(Number(age?.[1])).toBeGreaterThanOrEqual(89);
+		expect(text).toContain(
+			"remove that directory manually only after confirming no scaffold for this project is running",
+		);
+		expect((await stat(lockPath)).isDirectory()).toBe(true);
+		expect(await pathExists(join(projectDir, "autoresearch"))).toBe(false);
+		expect(listExperiments()).toEqual([]);
+	});
+
+	it("auto-starts a scaffolded experiment on baseline so it can be completed", async () => {
+		const projectDir = await tempProjectDir();
+		const scaffolded = await scaffoldHandler()({
+			recipe_id: "prompt-optimization",
+			project_path: projectDir,
+			metric_name: "score",
+			overwrite: false,
+		});
+		expect(scaffolded.isError).not.toBe(true);
+		const experimentId = experimentIdFromResult(scaffolded);
+		expect(getExperiment(experimentId)?.status).toBe("scaffolded");
+
+		const logResult = resultToolHandler();
+		const baseline = await logResult({
+			experiment_id: experimentId,
+			iteration: 0,
+			score: 1,
+			is_baseline: true,
+			change_description: "baseline",
+		});
+		expect(baseline.isError).not.toBe(true);
+		const started = getExperiment(experimentId);
+		expect(started?.status).toBe("running");
+		expect(started?.started_at).toBeDefined();
+
+		const candidate = await logResult({
+			experiment_id: experimentId,
+			iteration: 1,
+			score: 2,
+			is_baseline: false,
+			change_description: "candidate",
+		});
+		expect(candidate.isError).not.toBe(true);
+
+		const completed = await updateExperimentHandler()({
+			experiment_id: experimentId,
+			status: "completed",
+		});
+		expect(completed.isError).not.toBe(true);
+		expect(completed.content[0]?.text.split("\n")).toContain(
+			"Status: completed",
+		);
+		expect(getExperiment(experimentId)).toMatchObject({
+			status: "completed",
+			started_at: started?.started_at,
+			total_iterations: 2,
+			successful_iterations: 1,
+			best_score: 2,
+		});
 	});
 });

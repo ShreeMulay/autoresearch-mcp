@@ -115,7 +115,7 @@ A good `program.md` should explain:
 - what the agent must not modify
 - strategy hints for the search
 - danger zones and anti-patterns
-- when to continue and when to stop
+- when to continue and when to stop: use bounded continuation (stop at budget, approval, safety, or supervisor limits) and never instruct the agent to run indefinitely; budgets and approval requirements are operator instructions, not server-enforced
 
 `autoresearch/eval.sh` should be run from the project root, be deterministic when possible, and print a single finite float to stdout. Whether higher or lower is better is defined by `metric_direction`. Log exactly one iteration 0 result with `is_baseline=true` before candidates.
 
@@ -138,7 +138,7 @@ Each phase should be independently testable. Avoid adding a monolithic autonomou
 ## Code contributions
 
 1. Fork the repo.
-2. Create a branch for your change.
+2. Create a branch for your change and install dependencies from the lockfile with `bun install --frozen-lockfile` (Bun >= 1.3.10). `autoresearch-mcp` is not yet published to npm; work from a source checkout as described in the README's "Install from source" section.
 3. Make the update.
 4. Run the checks locally:
 

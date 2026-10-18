@@ -35,6 +35,21 @@ const ALLOWED_TEMPLATE_NAMES = new Set([
 const activeScaffolds = new Set<string>();
 const LOCK_REMOVE_ATTEMPTS = 3;
 const TRANSACTION_REMOVE_ATTEMPTS = 2;
+export const APPROVAL_CONTROL_LINE =
+	"- Approval Required: obtain explicit human approval before each candidate evaluation and before accepting any candidate; stop and wait if approval is not given.";
+export const ENFORCEMENT_CONTROL_LINE =
+	"- Enforcement: budgets, approval, and stopping conditions are operator-enforced instructions; the server records them but does not stop the run.";
+/** Bounded-continuation wording shared with catalog/templates/<recipe>/program.md. */
+export const CONTINUATION_RULE_LINES = [
+	"## Continuation Rule",
+	"These are operator instructions; the autoresearch server records budgets and approvals but does not enforce them.",
+	"- Before repeated execution, obtain and record a finite bound (max iterations, time, tokens, or dollars); if none is set, ask the operator for one before looping.",
+	"- Persist through plateaus and early wins; do not end the loop merely because a result looks good.",
+	"- Stop when any recorded budget is exhausted.",
+	"- Stop and wait when human approval is required; when the risk policy sets requires_approval, obtain approval before each candidate evaluation or acceptance.",
+	"- Stop on any safety or validity failure, such as an evaluator error, a constraint violation, or a data-safety concern.",
+	"- Stop when the supervisor says stop.",
+] as const;
 const MetricDirectionSchema = z
 	.enum(["minimize", "maximize"])
 	.default("maximize");
@@ -160,9 +175,9 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 					} catch (error) {
 						if (isAlreadyExistsError(error)) {
 							throw new Error(
-								joinText(
-									"A scaffold operation is already in progress for project: ",
+								await describeHeldProjectLock(
 									resolvedProjectPath,
+									projectLockPath,
 								),
 							);
 						}
@@ -327,6 +342,32 @@ export function registerScaffoldingTools(mcp: McpServer): void {
 			}
 		},
 	);
+}
+
+/**
+ * Explain a held project lock. The age is informational only: the lock is never
+ * removed automatically because a live scaffold may still own it.
+ */
+async function describeHeldProjectLock(
+	projectPath: string,
+	lockPath: string,
+): Promise<string> {
+	let age = "unknown";
+	try {
+		const ageMs = Date.now() - (await lstat(lockPath)).mtimeMs;
+		age = joinText(String(Math.max(0, Math.floor(ageMs / 1000))), " seconds");
+	} catch {
+		// The lock may have been released between mkdir and lstat.
+	}
+	return [
+		joinText(
+			"A scaffold operation is already in progress for project: ",
+			projectPath,
+		),
+		joinText("Lock path: ", lockPath),
+		joinText("Lock age: ", age, " (from lock mtime; informational only)"),
+		"If no scaffold is running (for example, after a crash), remove that directory manually only after confirming no scaffold for this project is running. The server never deletes it automatically.",
+	].join("\n");
 }
 
 function isRecipe(recipe: CatalogItem | null): recipe is CatalogItem {
@@ -507,6 +548,8 @@ function normalizeGeneratedProgram(
 				"- Evaluator Command: ",
 				sanitizeInline(args.spec.evaluator_command),
 			),
+			...(risk.requires_approval ? [APPROVAL_CONTROL_LINE] : []),
+			ENFORCEMENT_CONTROL_LINE,
 		].join("\n"),
 		"\n",
 	);
@@ -598,12 +641,7 @@ function buildProgramTemplate(args: {
 		"- Accept a candidate only when it strictly improves on the best earlier score in the declared metric direction.",
 	];
 
-	lines.push(
-		"",
-		"## NEVER STOP",
-		"Continue iterating until the metric improves or the explicit experiment budget is exhausted.",
-		"Always record the result, preserve the best-known state, and keep the loop moving forward.",
-	);
+	lines.push("", ...CONTINUATION_RULE_LINES);
 
 	return joinText(lines.join("\n"), "\n");
 }

@@ -107,7 +107,9 @@ describe("experiment lifecycle integrity", () => {
 			expect(exitCodes.sort()).toEqual([0, 1]);
 
 			resetDb(dbPath);
-			expect(["completed", "failed"]).toContain(getExperiment("race")?.status);
+			expect(["completed", "failed"]).toContain(
+				getExperiment("race")?.status ?? "missing",
+			);
 		} finally {
 			closeDb();
 			await rm(dir, { force: true, recursive: true });

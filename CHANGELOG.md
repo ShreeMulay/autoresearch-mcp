@@ -13,6 +13,8 @@ Planned first npm release. Versions 0.1.0 through 0.3.0 were never published to 
 
 - **Shipped-content data boundary** — public guidance now requires synthetic, non-sensitive examples and prohibits PHI, patient identifiers, PHI-bearing prompts or model responses, clinical records, secrets, and production datasets in the MCP server, evaluators, review tooling, logs, fixtures, and CI.
 - **Nonclinical examples** — patient-specific and clinical automation examples were replaced with synthetic product, inventory, publishing, and research workflows.
+- **Dependency floors for audit advisories (PR #22)** — `resolutions` raise `fast-uri` to 3.1.8, `hono` to 4.13.7, and `ip-address` to 10.7.1; `@hono/node-server` 1.19.15, `body-parser` 2.3.0, and `qs` 6.16.0 are unchanged.
+- **Safe installer overwrite** — `--overwrite` no longer deletes the existing skill before its replacement is ready. The installer stages the new copy or symlink beside the target, moves the existing target (directory, file, or symlink, including dangling symlinks) to a backup, promotes the staged content, then removes the backup. If promotion fails it restores the original, or keeps the backup and prints its path if restoring also fails. This protects against ordinary failures; it is not crash-atomic.
 
 ### Earlier security work
 
@@ -32,11 +34,19 @@ Planned first npm release. Versions 0.1.0 through 0.3.0 were never published to 
 - **Runtime declarations** — the standalone skill installer supports Node.js 22 and 24, while the MCP server requires Bun >= 1.3.10.
 - **Catalog loader strictness** — duplicate technique IDs and YAML layer/directory mismatches are reported as load errors; the bundled catalog is regression-tested to load with zero errors.
 - **Real JSON Schema conversion** — schema resources now use `zod-to-json-schema` rather than a simplified placeholder conversion.
+- **Persisted controls in `get_experiment`** — experiment details now show the acceptance rule, stopping conditions, budget, risk policy (including `requires_approval`), and constraints.
+- **Install from source** — the README's primary quick start clones a pinned revision, runs `bun install --frozen-lockfile`, launches the server with `bun run /absolute/path/to/autoresearch-mcp/src/index.ts`, and installs the skill with `node bin/autoresearch-install-skill`. Registry commands are marked as working only after npm publication.
+- **CI and tests** — Bun pinned-minimum plus latest coverage, standalone installer coverage on supported Node.js 22 and 24, dynamic tarball naming, packed-install smoke for MCP `tools/list`, committed Biome config, E2E readiness polling instead of fixed sleeps, installer overwrite safety tests, and a documentation entry-point test that keeps registry commands behind the after-publication caveat.
 
 ### Changed
 
 - **Acceptance-rule migration v4** — existing experiment specs are narrowed to `strict-improvement` during startup without dropping records or historical tables. Migration v3 retains its legacy default when `acceptance_rule` is omitted and preserves legacy rule values until v4 performs the cutover.
 - **Evaluator bindings** — scaffolded ML evaluators honor metric direction for validation loss; literature evaluators bind the selected target as literal data rather than silently reading `synthesis.md`. Standalone evaluator defaults remain compatible.
+- **Automatic run start** — the first successful `log_result` moves a `scaffolded` experiment to `running` and sets `started_at`, so walkthroughs can reach `update_experiment(status="completed")` without a separate start call. Paused, completed, and failed experiments are never changed by logging.
+- **Bounded continuation** — generated programs no longer say "NEVER STOP"; they continue only within budget and stop at budget, approval, safety, or supervisor limits. Budgets and approval requirements are operator instructions, not server-enforced.
+- **Iteration validation** — `log_result` iterations must be safe nonnegative integers.
+- **Scaffold lock guidance** — documentation explains the "scaffold operation already in progress" error and when a leftover `.autoresearch-scaffold.lock` may be removed.
+- **Skill accuracy** — the technique table lists all 30 catalog items (adding `binary-evaluator`); `get_technique` is described as returning details, composition, and examples (templates come from `get_template`); `get_experiment` results are documented as capped at 200; approval-gate advice treats it consistently as a throughput constraint rather than an incompatibility; simulated annealing never logs worse explorations as improvements; champion-challenger is described as an incumbent/challenger comparison with traffic splitting as one option.
 - **Tracking workflow** — scaffolding returns an auto-registered Experiment ID. Documentation now treats separate registration as an alternative and explicitly distinguishes SQLite result logging from manually maintained TSV files.
 
 - **Default database path** moved out of the package tree to the user data directory (`$XDG_DATA_HOME/autoresearch-mcp/autoresearch.db` or `~/.local/share/autoresearch-mcp/autoresearch.db`). `AUTORESEARCH_DB_PATH` still overrides it and `:memory:` is honored.
@@ -53,7 +63,6 @@ Planned first npm release. Versions 0.1.0 through 0.3.0 were never published to 
 ### Removed
 
 - **`log_technique_outcome`** — removed the callable tool, database write API, public type, and active documentation because no read path used the records to improve suggestions. New databases omit the table; existing databases remain compatible because startup does not destructively drop an inert historical table.
-- **CI and tests** — Bun pinned-minimum plus latest coverage, standalone installer coverage on supported Node.js 22 and 24, dynamic tarball naming, packed-install smoke for MCP `tools/list`, committed Biome config, and E2E readiness polling instead of fixed sleeps.
 
 ## [0.3.0] - 2026-05-07
 

@@ -10,9 +10,25 @@
  * --dry-run: print what would be done without making changes
  * --overwrite: replace an existing skill directory/link
  * --symlink: create a symlink instead of copying files
+ *
+ * Overwrite never deletes the existing target before its replacement is
+ * ready: new content is staged in a unique sibling path, the existing target
+ * is renamed to a unique sibling backup, the staged content is renamed into
+ * place, and only then is the backup removed. On promotion failure the backup
+ * is restored. This protects against ordinary failures; it is not
+ * crash-atomic (a crash between renames can leave a staging or backup path).
  */
 
-import { access, cp, mkdir, readlink, rm, symlink } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import {
+	cp,
+	lstat,
+	mkdir,
+	readlink,
+	rename,
+	rm,
+	symlink,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -94,12 +110,117 @@ function getTargets(target) {
 	return [PLATFORMS[target]].filter(Boolean);
 }
 
-async function pathExists(path) {
+/**
+ * True if anything (including a dangling symlink) exists at `path`.
+ * Uses lstat so symlinks are inspected without following them.
+ */
+async function entryExists(path) {
 	try {
-		await access(path);
+		await lstat(path);
 		return true;
-	} catch {
-		return false;
+	} catch (err) {
+		if (
+			err &&
+			typeof err === "object" &&
+			"code" in err &&
+			err.code === "ENOENT"
+		) {
+			return false;
+		}
+		throw err;
+	}
+}
+
+/**
+ * Test-only fault seam. AUTORESEARCH_INSTALL_FAULT may contain a
+ * comma-separated list of: "copy" (fail while staging), "promote" (fail
+ * moving staged content into place), "restore" (fail restoring the backup).
+ */
+function faultEnabled(stage) {
+	const raw = process.env.AUTORESEARCH_INSTALL_FAULT;
+	if (!raw) return false;
+	return raw
+		.split(",")
+		.map((value) => value.trim())
+		.includes(stage);
+}
+
+function injectFault(stage) {
+	if (faultEnabled(stage)) {
+		throw new Error(`injected ${stage} failure (AUTORESEARCH_INSTALL_FAULT)`);
+	}
+}
+
+function uniqueSibling(target, label) {
+	return join(
+		dirname(target),
+		`.autoresearch.${label}-${process.pid}-${randomUUID()}`,
+	);
+}
+
+async function stageContent(mode, staging) {
+	if (mode === "symlink") {
+		await symlink(skillSrc, staging, "dir");
+	} else {
+		await cp(skillSrc, staging, { recursive: true });
+	}
+	injectFault("copy");
+}
+
+/**
+ * Stage the skill beside `target` and promote it, keeping any existing target
+ * as a backup until the replacement is in place.
+ */
+async function replaceTarget(mode, target, hasExisting) {
+	const staging = uniqueSibling(target, "staging");
+	try {
+		await stageContent(mode, staging);
+	} catch (err) {
+		await rm(staging, { force: true, recursive: true }).catch(() => {});
+		throw err;
+	}
+
+	if (!hasExisting) {
+		try {
+			injectFault("promote");
+			await rename(staging, target);
+		} catch (err) {
+			await rm(staging, { force: true, recursive: true }).catch(() => {});
+			throw err;
+		}
+		return;
+	}
+
+	const backup = uniqueSibling(target, "backup");
+	try {
+		await rename(target, backup);
+	} catch (err) {
+		await rm(staging, { force: true, recursive: true }).catch(() => {});
+		throw err;
+	}
+
+	try {
+		injectFault("promote");
+		await rename(staging, target);
+	} catch (err) {
+		await rm(staging, { force: true, recursive: true }).catch(() => {});
+		try {
+			injectFault("restore");
+			await rename(backup, target);
+		} catch (restoreErr) {
+			console.log(
+				`  [warn] could not restore the original skill (${restoreErr instanceof Error ? restoreErr.message : String(restoreErr)}); it is preserved at ${backup}`,
+			);
+		}
+		throw err;
+	}
+
+	try {
+		await rm(backup, { force: true, recursive: true });
+	} catch (err) {
+		console.log(
+			`  [warn] installed, but could not remove backup ${backup}: ${err instanceof Error ? err.message : String(err)}`,
+		);
 	}
 }
 
@@ -148,7 +269,8 @@ export async function installSkill(argv = process.argv.slice(2)) {
 		try {
 			await mkdir(currentTarget.dir, { recursive: true });
 
-			if (await pathExists(currentTarget.link)) {
+			const hasExisting = await entryExists(currentTarget.link);
+			if (hasExisting) {
 				if (!overwrite) {
 					try {
 						const existing = await readlink(currentTarget.link);
@@ -167,17 +289,15 @@ export async function installSkill(argv = process.argv.slice(2)) {
 					skipped++;
 					continue;
 				}
-
-				await rm(currentTarget.link, { force: true, recursive: true });
 			}
 
+			await replaceTarget(mode, currentTarget.link, hasExisting);
+
 			if (mode === "symlink") {
-				await symlink(skillSrc, currentTarget.link, "dir");
 				console.log(
 					`  [ok]   ${currentTarget.name}: linked ${currentTarget.link}`,
 				);
 			} else {
-				await cp(skillSrc, currentTarget.link, { recursive: true });
 				console.log(
 					`  [ok]   ${currentTarget.name}: copied ${currentTarget.link}`,
 				);

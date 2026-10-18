@@ -105,7 +105,8 @@ The program.md should include:
 6. Run \`autoresearch/eval.sh\` from the project root
 7. Log exactly one iteration 0 baseline with \`is_baseline=true\` before candidates
 8. Require strict improvement in the declared metric direction
-9. The instruction "NEVER STOP" (continue until budget exhausted)
+9. Bounded continuation: before any repeated execution, obtain and record a finite bound (iterations, time, tokens, or dollars); persist through plateaus, but stop when the budget is exhausted, when human approval is required (before each candidate evaluation/acceptance when the risk policy sets requires_approval), on any safety or validity failure, or when the supervisor says stop
+10. A note that these limits are operator instructions, not server-enforced controls
 
 Follow the Karpathy convention: program.md is the human-agent interface, written by the human, read by the agent. It should be a lightweight "skill" definition.`,
 					},

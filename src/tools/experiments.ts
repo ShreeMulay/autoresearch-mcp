@@ -123,7 +123,7 @@ export function registerExperimentTools(mcp: McpServer): void {
 
 	mcp.tool(
 		"update_experiment",
-		"Update experiment status and notes.",
+		"Update experiment status and notes. Valid transitions: scaffolded -> running|failed; running -> paused|completed|failed; paused -> running|completed|failed; completed and failed are terminal. The first successfully logged result (log_result) automatically moves a scaffolded experiment to running, so after logging a baseline you can set completed directly.",
 		{
 			experiment_id: z.string().describe("Experiment ID"),
 			status: z
@@ -218,10 +218,16 @@ export function registerExperimentTools(mcp: McpServer): void {
 
 	mcp.tool(
 		"log_result",
-		"Log a single experiment iteration result and return updated totals.",
+		"Log a single experiment iteration result and return updated totals. A successfully logged result automatically starts a scaffolded experiment (status becomes running and started_at is set once); other statuses are left unchanged, and rejected logs change nothing.",
 		{
 			experiment_id: z.string().describe("Experiment ID"),
-			iteration: z.number().int().nonnegative().describe("Iteration number"),
+			iteration: z
+				.number()
+				.int()
+				.nonnegative()
+				// int + nonnegative + MAX_SAFE_INTEGER == Number.isSafeInteger && >= 0
+				.max(Number.MAX_SAFE_INTEGER)
+				.describe("Iteration number (nonnegative safe integer)"),
 			score: z.number().describe("Observed score"),
 			improved: z
 				.boolean()
@@ -460,9 +466,9 @@ export function buildExperimentSpec(args: {
 	evaluatorCommand: string;
 	mutationStrategy: string;
 	recipeId?: ExperimentSpec["recipe_id"];
-	budget?: ExperimentSpec["budget"];
-	riskPolicy?: ExperimentSpec["risk_policy"];
-	constraints?: ExperimentSpec["constraints"];
+	budget?: z.input<typeof BudgetSchema>;
+	riskPolicy?: z.input<typeof RiskPolicySchema>;
+	constraints?: z.input<typeof ConstraintsSchema>;
 }): ExperimentSpec {
 	return {
 		target_artifact: args.targetArtifact,
@@ -485,7 +491,7 @@ export function buildExperimentSpec(args: {
 	};
 }
 
-function formatExperimentMarkdown(
+export function formatExperimentMarkdown(
 	experiment: Experiment,
 	results?: ExperimentResult[],
 	resultsTruncated = false,
@@ -528,6 +534,8 @@ function formatExperimentMarkdown(
 		joinText("Completed At: ", experiment.completed_at ?? "-"),
 		joinText("Notes: ", experiment.notes ?? "-"),
 		"",
+		...formatSpecControls(experiment.spec),
+		"",
 		"## Cost Totals",
 		joinText("Tokens: ", formatInteger(experiment.cost_tokens)),
 		joinText("Dollars: ", formatCurrency(experiment.cost_dollars)),
@@ -555,6 +563,49 @@ function formatExperimentMarkdown(
 	}
 
 	return lines.join("\n");
+}
+
+function formatSpecControls(spec: ExperimentSpec): string[] {
+	const { budget, constraints, risk_policy: risk } = spec;
+	return [
+		"## Run Controls",
+		joinText("Acceptance Rule: ", spec.acceptance_rule),
+		joinText("Stopping Conditions: ", spec.stopping_conditions.join(", ")),
+		"Budget:",
+		joinText("- max_iterations: ", formatControlValue(budget.max_iterations)),
+		joinText(
+			"- max_time_seconds: ",
+			formatControlValue(budget.max_time_seconds),
+		),
+		joinText("- max_tokens: ", formatControlValue(budget.max_tokens)),
+		joinText("- max_dollars: ", formatControlValue(budget.max_dollars)),
+		"Risk Policy:",
+		joinText("- sandbox_only: ", String(risk.sandbox_only)),
+		joinText("- requires_approval: ", String(risk.requires_approval)),
+		joinText("- network_denied: ", String(risk.network_denied)),
+		joinText("- secrets_denied: ", String(risk.secrets_denied)),
+		"Constraints:",
+		joinText(
+			"- metric_floors: ",
+			formatConstraintMap(constraints.metric_floors),
+		),
+		joinText(
+			"- metric_ceilings: ",
+			formatConstraintMap(constraints.metric_ceilings),
+		),
+		"Budgets, approval, and stopping conditions are operator-enforced; the server records them but does not stop runs.",
+	];
+}
+
+function formatControlValue(value: number | undefined): string {
+	return value === undefined ? "not set" : String(value);
+}
+
+function formatConstraintMap(values: Record<string, number>): string {
+	const ordered = Object.fromEntries(
+		Object.entries(values).sort(([left], [right]) => left.localeCompare(right)),
+	);
+	return JSON.stringify(ordered);
 }
 
 function formatExperimentRow(experiment: Experiment): string {
@@ -601,7 +652,7 @@ function inlineCode(value: string): string {
 	return joinText("`", value, "`");
 }
 
-function formatNumber(value: number | undefined): string {
+export function formatNumber(value: number | undefined): string {
 	if (value === undefined) {
 		return "-";
 	}
@@ -609,7 +660,7 @@ function formatNumber(value: number | undefined): string {
 	return String(value);
 }
 
-function formatInteger(value: number | undefined): string {
+export function formatInteger(value: number | undefined): string {
 	if (value === undefined) {
 		return "-";
 	}
@@ -617,7 +668,7 @@ function formatInteger(value: number | undefined): string {
 	return String(Math.round(value));
 }
 
-function formatCurrency(value: number | undefined): string {
+export function formatCurrency(value: number | undefined): string {
 	if (value === undefined) {
 		return "-";
 	}
@@ -625,7 +676,7 @@ function formatCurrency(value: number | undefined): string {
 	return joinText("$", value.toFixed(4));
 }
 
-function escapeTableCell(value: string): string {
+export function escapeTableCell(value: string): string {
 	return value.replaceAll("|", "\\|").replaceAll("\n", " ");
 }
 

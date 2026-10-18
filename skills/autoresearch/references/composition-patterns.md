@@ -34,14 +34,14 @@ Answer these questions:
 |----------|-------------------|--------------|---------------|---------------------|---------------------|---------------------|
 | hill-climbing | Best | Good | Good | Slow | Good | Too slow |
 | evolutionary | Best | Good | Good | Slow | Good | Too slow |
-| bayesian-optimization | Good | Expensive | Expensive | N/A | Good | N/A |
+| bayesian-optimization | Good | Expensive | Expensive | N/A | Good | Good |
 | beam-search | Good | Expensive | Good | N/A | Good | N/A |
 | simulated-annealing | Best | Good | Good | Slow | Good | Too slow |
 | multi-armed-bandit | Best | Good | Good | Slow | Good | Too slow |
 | self-refine | N/A | Best | Best | N/A | N/A | Good |
 | ablation-elimination | Good | N/A | N/A | N/A | Best | N/A |
 
-**Legend**: Best = natural fit, Good = works well, Slow = possible but inefficient, Expensive = high cost per iteration, N/A = not applicable, Too slow = human bottleneck
+**Legend**: Best = natural fit, Good = works well, Slow = possible but inefficient, Expensive = high cost per iteration, N/A = not applicable, Too slow = compatible, but the human bottleneck caps throughput. Approval gating is a throughput constraint, not a compatibility constraint: sample-efficient strategies (bayesian-optimization, self-refine) pair best with human-approval-gate
 
 ### Step 3: Choose Pattern
 
@@ -49,7 +49,7 @@ Answer these questions:
 |---------|-------------|
 | single-ratchet | One artifact, clear metric, sequential improvement |
 | two-loop | Many similar items, shared strategy, per-item evaluation |
-| champion-challenger | Production traffic, statistical significance needed |
+| champion-challenger | Compare a challenger against the incumbent champion before replacing it (traffic splitting is one example, not required) |
 | bounded-episode | Fixed budget (time/money), must stop and deliver |
 | checkpoint-and-resume | Long runs, interruption risk, cloud environments |
 | branch-and-merge | Diverse exploration, parallel resources available |
@@ -66,7 +66,7 @@ Example: "I want to optimize my API response format for clarity, evaluated by cu
 ## Common Pitfalls
 
 ### Mismatched Speed
-Pairing slow evaluator (human-approval-gate) with fast strategy (hill-climbing) creates a bottleneck. Either automate evaluation or switch to sample-efficient strategy.
+Pairing slow evaluator (human-approval-gate) with fast strategy (hill-climbing) is compatible but creates a throughput bottleneck. Either automate evaluation or switch to a sample-efficient strategy (bayesian-optimization, self-refine).
 
 ### Missing Regression Guard
 Production optimizations without regression-detector are dangerous. Always add regression check for deployed systems.
@@ -84,7 +84,7 @@ You can compose recipes themselves:
 ```
 Phase 1: general-ratchet (explore, find promising region)
 Phase 2: custom recipe (exploit, fine-tune in good region)
-Phase 3: champion-challenger (validate, production A/B test)
+Phase 3: champion-challenger (validate the challenger against the incumbent, e.g. via an A/B test)
 ```
 
 Log each phase as a separate experiment and compare its recorded result history directly.
