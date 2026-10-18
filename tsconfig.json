@@ -18,6 +18,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts", "ci/release-control.ts"],
-  "exclude": ["node_modules", "dist", "tests"]
+  "include": ["src/**/*.ts", "ci/release-control.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }
