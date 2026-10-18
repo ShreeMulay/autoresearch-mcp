@@ -48,11 +48,17 @@ In any Claude Code / OpenCode session with autoresearch-mcp connected:
 -> Returns: Experiment ID: exp-id
 
 # 3. Before candidates, log exactly one measured baseline using the returned ID
+#    (this first successful log moves the experiment from scaffolded to running)
 > log_result(experiment_id: "exp-id", iteration: 0, score: 96.0, is_baseline: true, change_description: "checked-in baseline")
 
 # 4. After each candidate, log its actual measured score without asserting improved
 > log_result(experiment_id: "exp-id", iteration: 1, score: <measured-score>, change_description: "candidate change")
+
+# 5. When the bounded run is done, close it
+> update_experiment(experiment_id: "exp-id", status: "completed")
 ```
+
+Iterations must be safe nonnegative integers. Stop at your declared budget, any approval point, a safety concern, or a supervisor's request; the server records these controls but does not enforce them.
 
 For a new project needing starter files, use `scaffold_experiment` instead. It creates files and registers the experiment; reuse its returned Experiment ID without a second `register_experiment` call. Configure its placeholder evaluator before logging any scores.
 

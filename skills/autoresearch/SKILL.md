@@ -82,16 +82,21 @@ Choose one setup path: `scaffold_experiment` creates files **and** registers the
 
 `log_result` updates SQLite only. `results.tsv` is manually maintained; there is no automatic synchronization or import between the TSV and SQLite.
 
+Lifecycle: `scaffold_experiment` registers the experiment with status `scaffolded`. The first successful `log_result` (normally the iteration 0 baseline) automatically moves it to `running` and sets `started_at`; no separate "running" update is needed. Logging never changes a paused, completed, or failed experiment. Finish with `update_experiment(status="completed")`. `iteration` must be a safe nonnegative integer.
+
+Bounded continuation: keep iterating only while within the declared budget, and stop at the budget, an approval point (`risk_policy.requires_approval`), a safety concern, or a supervisor's request. Budgets and approval requirements are operator instructions recorded with the experiment; the server does not enforce them, so the agent must.
+
 ### Workflow A: Quick Optimization (5 minutes)
 
 For fast problems with clear metrics.
 
 1. **Discover**: Call `suggest_technique` with problem description
 2. **Scaffold**: Call `scaffold_experiment` with top recipe and save the returned Experiment ID
-3. **Baseline**: Run `autoresearch/eval.sh` from the project root and log exactly one iteration 0 result with `is_baseline=true`
-4. **Iterate**: Propose mutation, re-run, compare to champion
-5. **Log**: Call `log_result` for each iteration
-6. **Decide**: 3-5 iterations, pick best
+3. **Prepare**: Configure the placeholder evaluator (it exits 1 until configured) so `autoresearch/eval.sh` prints a real score
+4. **Baseline**: Run `autoresearch/eval.sh` from the project root and log exactly one iteration 0 result with `is_baseline=true` (this starts the run)
+5. **Iterate**: Propose mutation, re-run, compare to champion
+6. **Log**: Call `log_result` for each iteration
+7. **Decide**: 3-5 iterations, pick best, then `update_experiment(status="completed")`
 
 ### Workflow B: Serious Experiment (1 hour)
 
@@ -101,35 +106,36 @@ For important optimizations with budget for rigor.
 2. **Get details**: `get_technique` on top 2-3 candidates
 3. **Scaffold**: `scaffold_experiment` with budget, risk policy, and metric controls; save the returned Experiment ID
 4. **Prepare**: Configure the scaffold evaluator before measuring the baseline
-5. **Baseline**: Run `autoresearch/eval.sh` from the project root and log exactly one iteration 0 result with `is_baseline=true`
-6. **Run ratchet**: Use bounded human/agent-driven iterations with strict champion replacement in the declared metric direction
+5. **Baseline**: Run `autoresearch/eval.sh` from the project root and log exactly one iteration 0 result with `is_baseline=true` (this starts the run)
+6. **Run ratchet**: Use bounded human/agent-driven iterations with strict champion replacement in the declared metric direction; stop at budget, approval, safety, or supervisor limits
 7. **Log all**: `log_result` every iteration; omit `improved` for candidates so the server derives it
-8. **Analyze**: `get_experiment` with include_results=true
+8. **Analyze**: `get_experiment` with include_results=true (results are capped at 200 per fetch) to review scores and the persisted controls
+9. **Conclude**: `update_experiment(status="completed")`
 
 ### Workflow C: Human-Supervised Batch
 
 For a bounded set of candidates prepared or reviewed by a human or agent.
 
-1. **Setup**: Scaffold the experiment, save its returned Experiment ID, and verify the evaluator manually
-2. **Baseline**: Log exactly one iteration 0 result with `is_baseline=true`
-3. **Review**: Evaluate bounded candidate changes under the configured approval policy
+1. **Setup**: Scaffold the experiment, save its returned Experiment ID, and configure and verify the evaluator manually
+2. **Baseline**: Log exactly one iteration 0 result with `is_baseline=true`; this automatically moves the experiment from `scaffolded` to `running`
+3. **Review**: Evaluate bounded candidate changes under the configured approval policy, pausing for approval where `requires_approval` is set
 4. **Compare**: Retain only strict improvements in the declared metric direction
-5. **Integrate**: Review the best result and use `update_experiment` when complete
+5. **Integrate**: Review the best result and call `update_experiment(status="completed")`
 
 ## MCP Tool Mapping
 
 | Workflow Step | Primary Tool | Purpose |
 |--------------|-------------|---------|
 | Discover techniques | `suggest_technique` | AI recommends based on your constraints |
-| Deep dive | `get_technique` | Full details, templates, examples |
+| Deep dive | `get_technique` | Technique details, recipe composition, examples (fetch templates with `get_template`) |
 | Browse catalog | `search_techniques` | Natural language search all 30 techniques |
 | Track an existing setup | `register_experiment` | Alternative to scaffolding: create a record in SQLite |
 | Generate files and track | `scaffold_experiment` | Create starter files and an experiment record; return its ID |
 | Fetch template | `get_template` | Fetch a recipe's template file such as program.md or eval.sh |
-| Log iteration | `log_result` | Record score, change description, cost |
-| View progress | `get_experiment` | Experiment summary + all results |
+| Log iteration | `log_result` | Record score, change description, cost; first log starts a scaffolded run |
+| View progress | `get_experiment` | Experiment summary, persisted controls, and results with `include_results` (capped at 200) |
 | Browse runs | `list_experiments` | All experiments, filter by status/project |
-| Update status | `update_experiment` | Mark running/paused/completed/failed |
+| Update status | `update_experiment` | Mark paused/completed/failed (or running to resume) |
 | Diagnostics | `get_server_info` | Version, catalog stats, and DB path for diagnostics/handshake |
 
 ## Composition Rules
@@ -143,7 +149,7 @@ Recipes are composed from 4 layers. You can build custom recipes by mixing layer
    - evolutionary: population-based, genetic mutations
    - bayesian-optimization: model-based, sample-efficient
    - beam-search: keep top-k candidates
-   - simulated-annealing: early exploration, late exploitation
+   - simulated-annealing: early exploration, late exploitation; worse exploratory candidates are never logged as improvements or promoted to champion
 
 2. **Evaluator** (scoring function): How do you judge success?
    - benchmark-harness: automated benchmark
@@ -155,7 +161,7 @@ Recipes are composed from 4 layers. You can build custom recipes by mixing layer
 3. **Pattern** (execution structure): How do you organize the loop?
    - single-ratchet: one champion, replace if better
    - two-loop: outer strategy + inner batch
-   - champion-challenger: A/B test with traffic splitting
+   - champion-challenger: compare a challenger against the incumbent champion (traffic splitting is one way, not required)
    - bounded-episode: fixed budget, best wins
    - checkpoint-and-resume: save state, restart later
 
@@ -177,7 +183,7 @@ bayesian-optimization + rubric-scorer                + champion-challenger = con
 
 **Compatibility rules**:
 - GPU-required strategies (some evolutionary variants) need GPU evaluator or surrogate
-- human-approval-gate limits iteration speed — pair with sample-efficient strategies (bayesian-optimization, multi-armed-bandit)
+- human-approval-gate is a throughput constraint, not a compatibility one: it works with fast strategies, but every candidate waits for a human ("Too slow" in the matrix in `references/composition-patterns.md`). Prefer sample-efficient strategies that need few candidates (bayesian-optimization, self-refine), or keep fast strategies such as hill-climbing on an automated evaluator
 - regression-detector should wrap any evaluator for production systems
 
 ## Anti-Patterns
@@ -194,8 +200,8 @@ Log exactly one iteration 0 result with `is_baseline=true` before any candidate 
 ### DON'T: Change the metric mid-experiment
 If you realize your metric is wrong, stop, register a new experiment with the new metric.
 
-### DON'T: Run infinite loops without checkpoints
-Use bounded-episode or checkpoint-and-resume. Power outages happen.
+### DON'T: Run unbounded loops
+Continue only within the declared budget and stop at budget, approval, safety, or supervisor limits. Use bounded-episode or checkpoint-and-resume for long runs. Power outages happen.
 
 ### DON'T: Ignore cost
 Define token/dollar budgets and stopping conditions in the experiment spec, then enforce them in the agent loop. `register_experiment` tracks core fields; call `log_result` with cost data and review `list_experiments` to see cumulative spend.
@@ -217,11 +223,12 @@ Start with general-ratchet recipe. Only build custom compositions after 3+ exper
 | evolutionary | strategy | Evolutionary | Population-based genetic mutations |
 | bayesian-optimization | strategy | Bayesian Optimization | Model-based, sample-efficient |
 | beam-search | strategy | Beam Search | Keep top-k candidates |
-| simulated-annealing | strategy | Simulated Annealing | Early exploration, late exploitation |
+| simulated-annealing | strategy | Simulated Annealing | Early exploration, late exploitation; never log worse explorations as improvements |
 | multi-armed-bandit | strategy | Multi-Armed Bandit | Explore/exploit with regret bounds |
 | self-refine | strategy | Self-Refine | Iterative self-correction |
 | ablation-elimination | strategy | Ablation Elimination | Remove components, measure impact |
 | benchmark-harness | evaluator | Benchmark Harness | Automated performance benchmark |
+| binary-evaluator | evaluator | Binary Evaluator | Pass/fail checklist; score = passed criteria / total |
 | llm-as-judge | evaluator | LLM as Judge | Frontier model evaluates quality |
 | rubric-scorer | evaluator | Rubric Scorer | Structured rubric scoring |
 | pairwise-comparison | evaluator | Pairwise Comparison | A/B comparison between candidates |
@@ -230,7 +237,7 @@ Start with general-ratchet recipe. Only build custom compositions after 3+ exper
 | cost-latency-evaluator | evaluator | Cost/Latency Evaluator | Multi-objective cost scoring |
 | single-ratchet | pattern | Single Ratchet | One champion, replace if better |
 | two-loop | pattern | Two Loop | Outer strategy + inner batch |
-| champion-challenger | pattern | Champion-Challenger | A/B test with traffic splitting |
+| champion-challenger | pattern | Champion-Challenger | Incumbent vs challenger comparison (traffic split optional) |
 | bounded-episode | pattern | Bounded Episode | Fixed budget, best wins |
 | checkpoint-and-resume | pattern | Checkpoint & Resume | Save state, restart later |
 | branch-and-merge | pattern | Branch & Merge | Parallel branches, merge best |

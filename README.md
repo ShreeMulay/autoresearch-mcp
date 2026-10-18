@@ -24,9 +24,64 @@ Version 0.4.0 is not yet published or tagged. Package safety and protected Forge
 
 Runtime requirements:
 
-- MCP server (`autoresearch-mcp`): requires [Bun](https://bun.sh) >= 1.3.10, because the server uses `bun:sqlite`
-- Standalone skill installer (`autoresearch-install-skill`): supports Node.js 22 and 24, no Bun needed
+- MCP server: requires [Bun](https://bun.sh) >= 1.3.10, because the server uses `bun:sqlite`
+- Standalone skill installer (`bin/autoresearch-install-skill`): supports Node.js 22 and 24, no Bun needed
 - Any MCP-compatible client such as Claude Code or OpenCode
+
+### Install from source (works today)
+
+`autoresearch-mcp` is not yet published to npm, so install from a reviewed source checkout. Pin an explicit revision or tag instead of tracking a moving branch:
+
+```bash
+# Forgejo (primary) or the GitHub mirror
+git clone ssh://git@git.thekidneyexperts.com:2222/thekidneyexperts/autoresearch-mcp.git /absolute/path/to/autoresearch-mcp
+# git clone https://github.com/ShreeMulay/autoresearch-mcp.git /absolute/path/to/autoresearch-mcp
+cd /absolute/path/to/autoresearch-mcp
+git checkout <reviewed-commit-or-tag>
+bun install --frozen-lockfile
+```
+
+Point your MCP client at the checkout with `bun`:
+
+Claude Code (MCP settings):
+
+```json
+{
+  "mcpServers": {
+    "autoresearch": {
+      "command": "bun",
+      "args": ["run", "/absolute/path/to/autoresearch-mcp/src/index.ts"]
+    }
+  }
+}
+```
+
+OpenCode (`~/.config/opencode/opencode.json`):
+
+```json
+{
+  "mcp": {
+    "autoresearch": {
+      "type": "local",
+      "command": ["bun", "run", "/absolute/path/to/autoresearch-mcp/src/index.ts"]
+    }
+  }
+}
+```
+
+Install the bundled skill from the checkout (Node.js 22 or 24 is enough):
+
+```bash
+node /absolute/path/to/autoresearch-mcp/bin/autoresearch-install-skill --target opencode
+node /absolute/path/to/autoresearch-mcp/bin/autoresearch-install-skill --target claude
+```
+
+The installer copies skill files by default. Use `--dry-run` to preview changes, `--symlink` to link to the checkout instead of copying, or `--overwrite` to replace an existing skill. Overwrite stages the new skill beside the target, moves the existing target to a backup, promotes the staged copy, then removes the backup; if promotion fails it restores the original (or prints the backup path if restoring fails too). This guards against losing the existing skill on ordinary failures but is not crash-atomic.
+
+### Install from npm (after publication)
+
+<!-- after-npm-publication -->
+> **After npm publication only** — `autoresearch-mcp` is not yet on npm; these commands will fail (or could resolve to an unrelated package) until then.
 
 After 0.4.0 is published, install globally (puts both commands on your PATH):
 
@@ -34,7 +89,7 @@ After 0.4.0 is published, install globally (puts both commands on your PATH):
 npm install -g autoresearch-mcp
 ```
 
-Or, after publication, run without a global install:
+Or run without a global install:
 
 ```bash
 # Start the MCP server (requires Bun)
@@ -46,46 +101,26 @@ npx -p autoresearch-mcp autoresearch-install-skill
 
 Note: `npm install -g` succeeds on a machine without Bun, but the `autoresearch-mcp` server command will not run until Bun >= 1.3.10 is installed. The standalone skill installer runs on supported Node.js 22 or 24 alone.
 
-### Install as Skill (Recommended)
-
-`autoresearch-mcp` ships with a skill file that teaches your AI agent the autoresearch methodology: when to use which technique, how to compose recipes, and how to run ratchet loops. The skill is lightweight (~100-400 tokens in context) while the MCP server provides the heavy machinery (catalog search, experiment tracking, scaffolding).
-
-**Skill + MCP = Brain + Hands**
-
-#### OpenCode
+Skill install from the published package:
 
 ```bash
-# Install the bundled skill into ~/.opencode/skills/autoresearch
+# OpenCode: installs into ~/.opencode/skills/autoresearch
 npx -p autoresearch-mcp autoresearch-install-skill --target opencode
+
+# Claude Code: installs into ~/.claude/skills/autoresearch
+npx -p autoresearch-mcp autoresearch-install-skill --target claude
 
 # If autoresearch-mcp is already installed globally (requires Bun;
 # on Node-only machines use autoresearch-install-skill instead):
 autoresearch-mcp install-skill --target opencode
-```
 
-Skills are auto-discovered from `~/.opencode/skills/`. The skill lazy-loads when your agent encounters optimization problems.
-
-#### Claude Code
-
-```bash
-npx -p autoresearch-mcp autoresearch-install-skill --target claude
-```
-
-#### pi.dev
-
-```bash
+# pi.dev
 pi --skill $(npm root -g)/autoresearch-mcp/skills/autoresearch/SKILL.md
 ```
 
-The installer copies skill files by default so `npx` temporary package caches do not leave broken symlinks. Use `--dry-run` to preview changes or `--overwrite` to replace an existing skill directory.
+MCP server configuration using the published package:
 
-### Install as MCP Server (Machinery)
-
-The MCP server provides tools and state. Install alongside the skill for full capability.
-
-#### Claude Code
-
-Add this to your MCP settings:
+Claude Code:
 
 ```json
 {
@@ -98,9 +133,7 @@ Add this to your MCP settings:
 }
 ```
 
-#### OpenCode
-
-Add this to `~/.config/opencode/opencode.json`:
+OpenCode:
 
 ```json
 {
@@ -112,6 +145,12 @@ Add this to `~/.config/opencode/opencode.json`:
   }
 }
 ```
+
+<!-- /after-npm-publication -->
+
+### Skill + MCP = Brain + Hands
+
+`autoresearch-mcp` ships with a skill file that teaches your AI agent the autoresearch methodology: when to use which technique, how to compose recipes, and how to run ratchet loops. The skill is lightweight (~100-400 tokens in context) while the MCP server provides the heavy machinery (catalog search, experiment tracking, scaffolding). Skills are auto-discovered from `~/.opencode/skills/` or `~/.claude/skills/` and lazy-load when your agent encounters optimization problems.
 
 Once connected, ask your agent things like:
 
@@ -131,10 +170,11 @@ Edit artifact -> Run evaluator -> Score improved? -> Yes: Keep -> Repeat
 The server gives your agent the pieces needed to run that loop in a structured way:
 
 1. Pick a technique or recipe.
-2. Scaffold an experiment with a program and evaluator harness; this also registers it. Save the returned Experiment ID.
-3. Using that ID, log exactly one iteration 0 baseline with `is_baseline=true`, then run candidate iterations against a measurable metric.
-4. Keep improvements, discard regressions.
-5. Track costs, timing, and experiment history.
+2. Scaffold an experiment with a program and evaluator harness; this also registers it with status `scaffolded`. Save the returned Experiment ID.
+3. Configure the evaluator, then, using that ID, log exactly one iteration 0 baseline with `is_baseline=true`. The first successful `log_result` automatically moves a `scaffolded` experiment to `running` and sets `started_at`; paused, completed, and failed experiments are never changed by logging.
+4. Run bounded candidate iterations against a measurable metric. Keep improvements, discard regressions.
+5. Track costs, timing, and experiment history, and stop at the declared budget, an approval point, a safety concern, or a supervisor's request. Budgets and approval requirements are operator instructions; the server records them but does not enforce them.
+6. Close the run with `update_experiment(status="completed")`.
 
 ## Technique Catalog
 
@@ -197,12 +237,12 @@ The server exposes 11 MCP tools.
 | Tool | Description |
 | --- | --- |
 | `search_techniques` | Search the catalog by query, or list all techniques when the query is empty. |
-| `get_technique` | Return full details for a technique by ID. |
+| `get_technique` | Return technique details, recipe composition, and examples by ID (use `get_template` for template files). |
 | `suggest_technique` | Describe a problem and get a recommended approach. |
 | `register_experiment` | Create a tracked record for an existing setup, as an alternative to scaffolding. |
-| `update_experiment` | Update experiment status with automatic timestamps. |
-| `log_result` | Log an iteration result with score, time, token, and dollar tracking. |
-| `get_experiment` | Retrieve experiment details and optional iteration history. |
+| `update_experiment` | Update experiment status (for example `completed`) with automatic timestamps. |
+| `log_result` | Log an iteration result (iteration must be a safe nonnegative integer) with score, time, token, and dollar tracking. The first successful log starts a scaffolded experiment. |
+| `get_experiment` | Retrieve experiment details, persisted controls (acceptance rule, stopping conditions, budget, risk policy including `requires_approval`, constraints), and optional iteration history (`include_results`, capped at 200 results). |
 | `list_experiments` | List experiments filtered by status or project. |
 | `scaffold_experiment` | Generate `program.md`, `eval.sh`, and `results.tsv` from a recipe and return the auto-registered Experiment ID. |
 | `get_template` | Return a recipe template file. |
@@ -224,7 +264,7 @@ Agent calls: scaffold_experiment(recipe_id: "prompt-optimization", ...)
 -> Returns: Experiment ID (reuse this for every tracking call)
 
 You: "Help me run a bounded ratchet iteration"
-Agent: reads program.md, configures the evaluator, logs the baseline using the returned ID, proposes an edit, runs `autoresearch/eval.sh` from the project root, and logs the result under human supervision.
+Agent: reads program.md, configures the evaluator, logs the baseline using the returned ID (this starts the run), proposes an edit, runs `autoresearch/eval.sh` from the project root, and logs the result under human supervision, stopping at the budget or any approval point.
 
 After 10 iterations: Score improved from 62 to 94 (+52%)
 ```
@@ -236,12 +276,15 @@ If you prefer explicit tool orchestration, the lifecycle looks like this:
 ```text
 1. suggest_technique(problem="reduce API latency without hurting quality")
 2. scaffold_experiment(recipe_id="code-performance", project_path="/repo", metric_name="requests/sec") -> Experiment ID: exp-id
-3. update_experiment(experiment_id="exp-id", status="running")
-4. log_result(experiment_id="exp-id", iteration=0, score=1100, is_baseline=true, improved=false, change_description="baseline before candidate changes")
+3. (configure autoresearch/eval.sh; the placeholder evaluator exits 1 until configured)
+4. log_result(experiment_id="exp-id", iteration=0, score=1100, is_baseline=true, improved=false, change_description="baseline before candidate changes")  -> scaffolded becomes running
 5. log_result(experiment_id="exp-id", iteration=1, score=1180, change_description="inlined hot path")
 6. log_result(experiment_id="exp-id", iteration=2, score=1165, change_description="added extra serialization")
 7. get_experiment(experiment_id="exp-id", include_results=true)
+8. update_experiment(experiment_id="exp-id", status="completed")
 ```
+
+No separate `update_experiment(status="running")` call is needed: the first successful `log_result` starts a scaffolded experiment. `iteration` must be a safe nonnegative integer.
 
 Log exactly one iteration 0 baseline before candidate iterations. Baselines are never improvements, so the explicit `improved=false` assertion matches the server-derived result. For candidates, omit `improved` as above and let the server derive it; if supplied, the assertion must match the server-derived result. Run the scaffold evaluator as `autoresearch/eval.sh` from the project root.
 
@@ -252,6 +295,8 @@ After scaffolding, your agent gets a working starting point:
 - `autoresearch/results.tsv` for manually maintained iteration history
 
 Do not call `register_experiment` after scaffolding: the experiment is already registered. For existing setups that do not need generated files, use `register_experiment` instead and reuse its returned ID. `log_result` updates SQLite only; it does not append to, import, or automatically synchronize `results.tsv`.
+
+Generated programs use bounded continuation: keep iterating only while within budget, and stop at the budget, an approval point, a safety concern, or a supervisor's request. If scaffolding reports that a scaffold operation is already in progress for the project, wait for it to finish; only remove a leftover `.autoresearch-scaffold.lock` directory after confirming no scaffold is running.
 
 ## Example Domains
 
@@ -284,40 +329,19 @@ You can use recipes as-is, inspect their parts with `get_technique`, or search t
 
 ## Configuration
 
-### Claude Code
+Use the source-checkout configuration from [Install from source](#install-from-source-works-today) today:
 
-```json
-{
-  "mcpServers": {
-    "autoresearch": {
-      "command": "bunx",
-      "args": ["autoresearch-mcp"]
-    }
-  }
-}
-```
+- command: `bun`
+- args: `run`, `/absolute/path/to/autoresearch-mcp/src/index.ts`
 
-### OpenCode
+Any client that supports launching a local stdio MCP server can use that pattern. If your client expects a single executable command, point it at the same Bun-based invocation.
 
-```json
-{
-  "mcp": {
-    "autoresearch": {
-      "type": "local",
-      "command": ["bunx", "autoresearch-mcp"]
-    }
-  }
-}
-```
+<!-- after-npm-publication -->
+> **After npm publication only** — `autoresearch-mcp` is not yet on npm; these commands will fail (or could resolve to an unrelated package) until then.
 
-### Other MCP clients
+After publication, the equivalent registry-based launch is command `bunx` with args `autoresearch-mcp` (see [Install from npm](#install-from-npm-after-publication) for full Claude Code and OpenCode JSON).
 
-Any client that supports launching a local stdio MCP server can use `autoresearch-mcp` with the same pattern:
-
-- command: `bunx`
-- args: `autoresearch-mcp`
-
-If your client expects a single executable command, point it at the same Bun-based invocation.
+<!-- /after-npm-publication -->
 
 ## Roadmap
 

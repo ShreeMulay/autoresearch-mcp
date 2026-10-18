@@ -4,6 +4,8 @@ Three end-to-end walkthroughs showing how to use autoresearch in practice.
 
 Each walkthrough uses `scaffold_experiment`, which creates files and registers the experiment in one call. All later calls reuse the returned Experiment ID. `register_experiment` is an alternative for an existing setup, not an additional step. `log_result` updates SQLite only; `results.tsv` is manually maintained with no automatic synchronization.
 
+Scaffolding registers the experiment with status `scaffolded`. The first successful `log_result` (the iteration 0 baseline) automatically moves it to `running` and sets `started_at`, so no separate "running" update is needed; logging never changes a paused, completed, or failed experiment. Each walkthrough ends with `update_experiment(status="completed")`. Iterations must be safe nonnegative integers. Keep every loop bounded: stop at the declared budget, an approval point, a safety concern, or a supervisor's request (the server records budgets and approval requirements but does not enforce them).
+
 ## Example 1: Optimizing a Prompt (15 minutes)
 
 All examples below use synthetic, non-sensitive data. Do not supply PHI, patient identifiers, PHI-bearing prompts or model responses, clinical records, secrets, or production datasets to the server or its surrounding tooling.
@@ -25,7 +27,8 @@ User: "I need to optimize my synthetic product-review summarization prompt."
 ### Step 2: Get Details
 ```
 → AI: Call get_technique("prompt-optimization")
-→ Returns: Full recipe details, composition, templates
+→ Returns: Technique details, recipe composition, and examples
+→ AI: Call get_template("prompt-optimization", ...) if template files are needed
 ```
 
 ### Step 3: Scaffold (automatically registers)
@@ -41,8 +44,9 @@ User: "I need to optimize my synthetic product-review summarization prompt."
 ```
 
 ### Step 4: Run Loop
+Configure `autoresearch/eval.sh` first if the scaffold left a placeholder (it exits 1 until configured).
 ```
-Iteration 0: Baseline prompt → Score: 0.42
+Iteration 0: Baseline prompt → Score: 0.42 (this log moves the experiment from scaffolded to running)
 → AI: Run autoresearch/eval.sh from the project root, then call log_result(exp-123e4567, iteration=0, score=0.42, improved=false, is_baseline=true,
                      change_description="Baseline system prompt")
 
@@ -63,7 +67,7 @@ Iteration 4: Final polish → Score: 0.54
                      change_description="Added explicit length constraint")
 ```
 
-The baseline log seeds `best_score` until an improved iteration lands.
+The baseline log seeds `best_score` until an improved iteration lands and starts the run.
 
 ### Step 5: Conclude
 ```
@@ -105,7 +109,7 @@ The baseline log seeds `best_score` until an improved iteration lands.
 ### Phase 3: Run with Regression Guard
 ```
 # autoresearch/eval.sh wraps benchmark + regression check and is run from the project root
-Iteration 0: Existing implementation → Score: 450ms, improved: false
+Iteration 0: Existing implementation → Score: 450ms, improved: false (starts the run)
 → AI: Call log_result(exp-api-789, iteration=0, score=450, improved=false, is_baseline=true,
                      change_description="Baseline API implementation")
 
@@ -135,7 +139,10 @@ Iteration 7: Optimize JSON serialization → Score: 190ms, improved: false
 ### Phase 4: Analyze
 ```
 → AI: Call get_experiment(exp-api-789, include_results=true)
-→ Shows: Best = iteration 6 (188ms), total cost = $0.23, wall time = 1h 47m
+→ Shows: Best = iteration 6 (188ms), total cost = $0.23, wall time = 1h 47m,
+         plus persisted controls (acceptance rule, stopping conditions, budget, risk policy, constraints)
+
+→ AI: Call update_experiment(exp-api-789, status="completed")
 ```
 
 ---
@@ -168,13 +175,13 @@ Iteration 7: Optimize JSON serialization → Score: 190ms, improved: false
 ```
 
 ### Evaluate a Bounded Candidate Set
-Run `autoresearch/eval.sh` from the project root. Log exactly one iteration 0 baseline with `is_baseline=true`, then review and log each candidate without asserting `improved`; the server derives strict improvement.
+Configure and verify `autoresearch/eval.sh`, then run it from the project root. Log exactly one iteration 0 baseline with `is_baseline=true`; this moves the experiment from `scaffolded` to `running`. Then review and log each candidate without asserting `improved`; the server derives strict improvement. Stop at the declared budget or any approval point.
 
 ### Review
 ```
 → AI: Call get_experiment(exp-inventory-456, include_results=true)
-→ Shows: Best iteration = 32 (accuracy: 94.2%), stopped after iteration 42
-→ Cost: $12.40, wall time: 6h 23m
+→ Shows: Best iteration = 32 (accuracy: 94.2%), stopped after iteration 42 at the declared budget
+→ Cost: $12.40, wall time: 6h 23m (results are capped at 200 per fetch)
 
 → AI: Call update_experiment(exp-inventory-456, status="completed")
 ```

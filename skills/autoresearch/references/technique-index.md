@@ -21,7 +21,7 @@ Builds surrogate model of the objective. Samples where uncertainty × expected i
 Keeps top-k candidates at each step. Breadth + depth balance. Best for: structured outputs (code, prompts with multiple sections).
 
 ### simulated-annealing
-Accepts worse solutions early with decreasing probability. Escapes local optima. Best for: complex landscapes with known good basins.
+Accepts worse solutions early with decreasing probability. Escapes local optima. A worse exploratory candidate may become the working point for further search, but it must never be logged as an improvement or replace the champion; the ratchet still keeps only strict improvements. Best for: complex landscapes with known good basins.
 
 ### multi-armed-bandit
 Allocates trials to arms based on observed rewards. Minimizes regret. Best for: online A/B testing, dynamic environments.
@@ -71,7 +71,7 @@ One champion. New candidate must beat champion to replace. Simplest ratchet. Bes
 Outer loop improves strategy, inner loop applies strategy to batch items. Best for: processing many similar items under one policy.
 
 ### champion-challenger
-Splits traffic: champion (current best) vs challenger (candidate). Statistical significance required. Best for: production A/B testing.
+Compares a challenger (candidate) against the incumbent champion (current best) before replacing it. Traffic splitting is one way to run the comparison, not a requirement. Best for: validating a candidate against the incumbent, including production A/B testing.
 
 ### bounded-episode
 Fixed budget (iterations, time, cost). Best candidate at end wins. Best for: time-boxed optimization.
