@@ -38,3 +38,12 @@ Use synthetic, non-sensitive data only; never expose PHI, patient identifiers, c
 
 ## Output Standard
 Leave the best measured configuration in place with enough notes for another run to reproduce the result.
+
+## Continuation Rule
+These are operator instructions; the autoresearch server records budgets and approvals but does not enforce them.
+- Before repeated execution, obtain and record a finite bound (max iterations, time, tokens, or dollars); if none is set, ask the operator for one before looping.
+- Persist through plateaus and early wins; do not end the loop merely because a result looks good.
+- Stop when any recorded budget is exhausted.
+- Stop and wait when human approval is required; when the risk policy sets requires_approval, obtain approval before each candidate evaluation or acceptance.
+- Stop on any safety or validity failure, such as an evaluator error, a constraint violation, or a data-safety concern.
+- Stop when the supervisor says stop.

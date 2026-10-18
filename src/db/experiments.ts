@@ -155,8 +155,8 @@ export function logExperimentResult(result: {
 	assertFiniteNonnegative("duration_seconds", result.duration_seconds);
 	assertFiniteNonnegative("cost_tokens", result.cost_tokens);
 	assertFiniteNonnegative("cost_dollars", result.cost_dollars);
-	if (!Number.isInteger(result.iteration) || result.iteration < 0) {
-		throw new Error("iteration must be a nonnegative integer");
+	if (!Number.isSafeInteger(result.iteration) || result.iteration < 0) {
+		throw new Error("iteration must be a nonnegative safe integer");
 	}
 	if (!Number.isFinite(result.score)) {
 		throw new Error("score must be finite");
@@ -250,6 +250,18 @@ export function logExperimentResult(result: {
 		}
 
 		refreshExperimentAggregates(result.experiment_id, champion);
+
+		// A validated log is the first evidence that a scaffolded run has begun.
+		// Only scaffolded experiments auto-start; every other status is preserved.
+		// This runs inside the same transaction, so any later failure rolls it back.
+		if (experiment.status === "scaffolded") {
+			db.prepare(
+				`UPDATE experiments SET
+          status = 'running',
+          started_at = COALESCE(started_at, datetime('now'))
+         WHERE id = $id AND status = 'scaffolded'`,
+			).run({ $id: result.experiment_id } as Params);
+		}
 
 		const row = db
 			.prepare(
@@ -371,6 +383,22 @@ function refreshExperimentAggregates(
 		total_iterations: number;
 	};
 
+	// Individually finite inputs can still sum past Number.MAX_VALUE. Throwing
+	// here lets the caller's transaction roll back instead of persisting Infinity.
+	const aggregates: Array<[string, number | null | undefined]> = [
+		["cost_tokens", totals.cost_tokens],
+		["cost_dollars", totals.cost_dollars],
+		["cost_wall_seconds", totals.cost_wall_seconds],
+		["best_score", championScore],
+	];
+	for (const [field, value] of aggregates) {
+		if (value !== undefined && value !== null && !Number.isFinite(value)) {
+			throw new Error(
+				`${field} aggregate must be finite; the result was not logged`,
+			);
+		}
+	}
+
 	db.prepare(
 		`UPDATE experiments SET
       best_score = $best_score,
@@ -450,9 +478,19 @@ function assertStatusTransition(current: string, next: string): void {
 		failed: [],
 	};
 	if (!transitions[current]?.includes(next)) {
-		throw new Error(
-			`Invalid experiment status transition: ${current} -> ${next}`,
-		);
+		const base = `Invalid experiment status transition: ${current} -> ${next}`;
+		if (
+			current === "scaffolded" &&
+			(next === "completed" || next === "paused")
+		) {
+			throw new Error(
+				`${base}. The experiment has not started: log a baseline result (which starts the run) or set status=running first.`,
+			);
+		}
+		if (transitions[current]?.length === 0) {
+			throw new Error(`${base}. ${current} is a terminal status.`);
+		}
+		throw new Error(base);
 	}
 }
 

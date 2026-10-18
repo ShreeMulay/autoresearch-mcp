@@ -5,34 +5,99 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
+import { VERSION } from "../../src/version.js";
 
 const SERVER_PATH = resolve(import.meta.dir, "../../src/index.ts");
 
 interface JsonRpcMessage {
+	jsonrpc: "2.0";
 	id?: number | string;
+	method?: string;
 	result?: unknown;
 	error?: unknown;
 }
 
-function parseJsonRpcMessages(buffer: string): JsonRpcMessage[] {
-	return buffer
-		.trim()
-		.split("\n")
-		.filter(Boolean)
-		.flatMap((line) => {
-			try {
-				return [JSON.parse(line) as JsonRpcMessage];
-			} catch {
-				return [];
-			}
-		});
+function isJsonRpcMessage(value: unknown): value is JsonRpcMessage {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		return false;
+	}
+	const candidate = value as Record<string, unknown>;
+	return (
+		candidate.jsonrpc === "2.0" &&
+		("result" in candidate ||
+			"error" in candidate ||
+			typeof candidate.method === "string")
+	);
 }
+
+/**
+ * Parse only complete, newline-terminated stdout frames. A trailing partial
+ * frame stays buffered until its newline arrives. Any complete line that is
+ * not a JSON-RPC message is recorded as a protocol violation.
+ */
+class JsonRpcFrameReader {
+	private pending = "";
+	readonly messages: JsonRpcMessage[] = [];
+	readonly invalidLines: string[] = [];
+
+	push(chunk: string): void {
+		this.pending += chunk;
+		let newline = this.pending.indexOf("\n");
+		while (newline !== -1) {
+			const line = this.pending.slice(0, newline).replace(/\r$/, "");
+			this.pending = this.pending.slice(newline + 1);
+			this.accept(line);
+			newline = this.pending.indexOf("\n");
+		}
+	}
+
+	private accept(line: string): void {
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(line);
+		} catch {
+			this.invalidLines.push(line);
+			return;
+		}
+		if (isJsonRpcMessage(parsed)) {
+			this.messages.push(parsed);
+		} else {
+			this.invalidLines.push(line);
+		}
+	}
+}
+
+describe("JsonRpcFrameReader", () => {
+	it("waits for a newline before parsing a split frame", () => {
+		const reader = new JsonRpcFrameReader();
+		reader.push('{"jsonrpc":"2.0","id":1,');
+		expect(reader.messages).toEqual([]);
+		reader.push('"result":{}}\n');
+		expect(reader.messages).toEqual([{ jsonrpc: "2.0", id: 1, result: {} }]);
+		expect(reader.invalidLines).toEqual([]);
+	});
+
+	it("records complete non-JSON-RPC lines as violations", () => {
+		const reader = new JsonRpcFrameReader();
+		reader.push('log noise\n{"foo":1}\n\n');
+		expect(reader.messages).toEqual([]);
+		expect(reader.invalidLines).toEqual(["log noise", '{"foo":1}', ""]);
+	});
+});
 
 describe("MCP Server E2E", () => {
 	let child: ReturnType<typeof spawn>;
-	let stdoutBuffer = "";
+	const stdout = new JsonRpcFrameReader();
 	let stderrBuffer = "";
 	let initialized = false;
+
+	function assertCleanStdout(): void {
+		if (stdout.invalidLines.length > 0) {
+			throw new Error(
+				`MCP server wrote non-JSON-RPC stdout lines: ${JSON.stringify(stdout.invalidLines)}`,
+			);
+		}
+	}
 
 	async function waitForJsonRpcResponse(
 		id: number,
@@ -41,9 +106,8 @@ describe("MCP Server E2E", () => {
 		const deadline = Date.now() + timeoutMs;
 
 		while (Date.now() < deadline) {
-			const message = parseJsonRpcMessages(stdoutBuffer).find(
-				(candidate) => candidate.id === id,
-			);
+			assertCleanStdout();
+			const message = stdout.messages.find((candidate) => candidate.id === id);
 
 			if (message) {
 				return message;
@@ -61,8 +125,8 @@ describe("MCP Server E2E", () => {
 		throw new Error(
 			[
 				`Timed out waiting for JSON-RPC response id ${id}`,
-				"--- stdout ---",
-				stdoutBuffer,
+				"--- stdout messages ---",
+				JSON.stringify(stdout.messages),
 				"--- stderr ---",
 				stderrBuffer,
 			].join("\n"),
@@ -78,8 +142,9 @@ describe("MCP Server E2E", () => {
 			},
 		});
 
-		child.stdout?.on("data", (data: Buffer) => {
-			stdoutBuffer += data.toString();
+		child.stdout?.setEncoding("utf8");
+		child.stdout?.on("data", (data: string) => {
+			stdout.push(data);
 		});
 
 		child.stderr?.on("data", (data: Buffer) => {
@@ -104,6 +169,8 @@ describe("MCP Server E2E", () => {
 	}, 20_000);
 
 	afterAll(async () => {
+		// Every complete frame the server wrote during the suite must be JSON-RPC.
+		expect(stdout.invalidLines).toEqual([]);
 		if (!child || child.exitCode !== null) {
 			return;
 		}
@@ -160,8 +227,26 @@ describe("MCP Server E2E", () => {
 		]);
 	});
 
-	it("server process stays alive", () => {
-		expect(child.killed).toBe(false);
+	it("stays alive and answers get_server_info with its version", async () => {
+		child.stdin?.write(
+			`${JSON.stringify({
+				jsonrpc: "2.0",
+				id: 5,
+				method: "tools/call",
+				params: { name: "get_server_info", arguments: {} },
+			})}\n`,
+		);
+		const response = await waitForJsonRpcResponse(5);
+		expect(response.error).toBeUndefined();
+		const result = response.result as {
+			content: Array<{ type: string; text: string }>;
+			isError?: boolean;
+		};
+		expect(result.isError).toBeUndefined();
+		expect(JSON.parse(result.content[0].text)).toMatchObject({
+			version: VERSION,
+		});
+		expect(child.exitCode).toBeNull();
 	});
 
 	it("rejects invalid list_experiments statuses during schema validation", async () => {

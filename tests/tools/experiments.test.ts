@@ -1,11 +1,12 @@
 /**
- * Tests for tool helper functions (src/tools/experiments.ts)
+ * Tests for experiment tools (src/tools/experiments.ts)
  *
- * Covers pure helpers and focused tool-handler response behavior.
+ * Covers exported helpers, registered tool schemas, and real handler output.
  */
 
 import { beforeEach, describe, expect, it } from "bun:test";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 import {
 	createExperiment,
 	getExperiment,
@@ -16,9 +17,13 @@ import { resetDb } from "../../src/db/schema.js";
 import { inferArtifactType } from "../../src/tools/artifacts.js";
 import {
 	buildExperimentSpec,
+	escapeTableCell,
+	formatCurrency,
+	formatInteger,
+	formatNumber,
 	registerExperimentTools,
 } from "../../src/tools/experiments.js";
-import type { ExperimentSpec } from "../../src/types.js";
+import { type ExperimentSpec, ExperimentSpecSchema } from "../../src/types.js";
 
 interface ToolResult {
 	content: Array<{ type: "text"; text: string }>;
@@ -37,19 +42,55 @@ type LogResultHandler = (args: {
 	is_baseline?: boolean;
 }) => Promise<ToolResult>;
 
-function logResultHandler(): LogResultHandler {
-	const handlers = new Map<string, LogResultHandler>();
+type GetExperimentHandler = (args: {
+	experiment_id: string;
+	include_results: boolean;
+}) => Promise<ToolResult>;
+
+type RegisterExperimentHandler = (args: {
+	project_path: string;
+	project_name?: string;
+	metric_name: string;
+	metric_direction: "minimize" | "maximize";
+	target_artifact: string;
+	evaluator_command: string;
+	mutation_strategy: string;
+	budget?: ExperimentSpec["budget"];
+	risk_policy?: ExperimentSpec["risk_policy"];
+	constraints?: Partial<ExperimentSpec["constraints"]>;
+}) => Promise<ToolResult>;
+
+interface RegisteredTool {
+	description: string;
+	shape: z.ZodRawShape;
+	handler: unknown;
+}
+
+function registeredTools(): Map<string, RegisteredTool> {
+	const tools = new Map<string, RegisteredTool>();
 	const mcp = {
 		tool: (...args: unknown[]) => {
-			const [name, , , handler] = args;
-			handlers.set(name as string, handler as LogResultHandler);
+			const [name, description, shape, handler] = args;
+			tools.set(name as string, {
+				description: description as string,
+				shape: shape as z.ZodRawShape,
+				handler,
+			});
 		},
-	} as McpServer;
+	} as unknown as McpServer;
 
 	registerExperimentTools(mcp);
-	const handler = handlers.get("log_result");
-	if (!handler) throw new Error("log_result handler was not registered");
-	return handler;
+	return tools;
+}
+
+function handler<T>(name: string): T {
+	const tool = registeredTools().get(name);
+	if (!tool) throw new Error(`${name} handler was not registered`);
+	return tool.handler as T;
+}
+
+function logResultHandler(): LogResultHandler {
+	return handler<LogResultHandler>("log_result");
 }
 
 function validSpec(): ExperimentSpec {
@@ -135,48 +176,69 @@ describe("Experiment response formatting", () => {
 		expect(getExperiment(experimentId)?.best_score).toBe(persisted.score);
 	});
 
-	it("formats currency values correctly", () => {
-		const formatCurrency = (value: number | undefined): string => {
-			if (value === undefined) return "-";
-			return `$${value.toFixed(4)}`;
-		};
-
+	it("formats currency values with the exported formatter", () => {
 		expect(formatCurrency(0.05)).toBe("$0.0500");
 		expect(formatCurrency(1.5)).toBe("$1.5000");
 		expect(formatCurrency(undefined)).toBe("-");
 	});
 
-	it("formats numbers correctly", () => {
-		const formatNumber = (value: number | undefined): string => {
-			if (value === undefined) return "-";
-			return String(value);
-		};
-
+	it("formats numbers and integers with the exported formatters", () => {
 		expect(formatNumber(95.5)).toBe("95.5");
 		expect(formatNumber(0)).toBe("0");
 		expect(formatNumber(undefined)).toBe("-");
+		expect(formatInteger(10.6)).toBe("11");
+		expect(formatInteger(undefined)).toBe("-");
 	});
 
-	it("escapes table cell content", () => {
-		const escapeTableCell = (value: string): string => {
-			return value.replaceAll("|", "\\|").replaceAll("\n", " ");
-		};
-
+	it("escapes table cell content with the exported helper", () => {
 		expect(escapeTableCell("a|b|c")).toBe("a\\|b\\|c");
 		expect(escapeTableCell("line1\nline2")).toBe("line1 line2");
+	});
+
+	it("escapes pipes and newlines in real get_experiment result rows", async () => {
+		createExperiment({
+			id: "escape",
+			project_path: "/fixture",
+			spec: validSpec(),
+		});
+		logExperimentResult({
+			experiment_id: "escape",
+			iteration: 0,
+			score: 1,
+			is_baseline: true,
+			cost_dollars: 0.05,
+			change_description: "a|b\nc",
+		});
+		const response = await handler<GetExperimentHandler>("get_experiment")({
+			experiment_id: "escape",
+			include_results: true,
+		});
+		expect(response.content[0].text.split("\n")).toContain(
+			"| 0 | 1 | no | a\\|b c | - | - | $0.0500 |",
+		);
 	});
 });
 
 describe("Experiment spec building", () => {
 	it("creates a valid ExperimentSpec with defaults", () => {
-		const spec = {
+		const spec = buildExperimentSpec({
+			targetArtifact: "test.md",
+			metricName: "compression_ratio",
+			metricDirection: "maximize",
+			evaluatorCommand: "python eval.py",
+			mutationStrategy: "LLM edit",
+			recipeId: "prompt-optimization",
+		});
+
+		expect(ExperimentSpecSchema.parse(spec)).toEqual(spec);
+		expect(spec).toEqual({
 			target_artifact: "test.md",
-			artifact_type: "content" as const,
-			recipe_id: "prompt-optimization" as const,
+			artifact_type: "content",
+			recipe_id: "prompt-optimization",
 			mutation_strategy: "LLM edit",
 			evaluator_command: "python eval.py",
 			metric_name: "compression_ratio",
-			metric_direction: "maximize" as const,
+			metric_direction: "maximize",
 			acceptance_rule: "strict-improvement",
 			budget: {},
 			environment: {},
@@ -191,13 +253,7 @@ describe("Experiment spec building", () => {
 				metric_floors: {},
 				metric_ceilings: {},
 			},
-		};
-
-		expect(spec.target_artifact).toBe("test.md");
-		expect(spec.metric_direction).toBe("maximize");
-		expect(spec.acceptance_rule).toBe("strict-improvement");
-		expect(spec.stopping_conditions).toContain("budget-exhaustion");
-		expect(spec.risk_policy.network_denied).toBe(true);
+		});
 	});
 
 	it("preserves caller-provided budget, risk policy, and constraints", () => {
@@ -223,5 +279,134 @@ describe("Experiment spec building", () => {
 		expect(spec.risk_policy.requires_approval).toBe(true);
 		expect(spec.constraints.metric_floors.pass_rate).toBe(0.9);
 		expect(spec.constraints.metric_ceilings).toEqual({});
+	});
+});
+
+describe("get_experiment spec controls", () => {
+	it("round-trips non-default controls from register_experiment to get_experiment", async () => {
+		const registered = await handler<RegisterExperimentHandler>(
+			"register_experiment",
+		)({
+			project_path: "/fixture",
+			metric_name: "pass_rate",
+			metric_direction: "maximize",
+			target_artifact: "src/main.ts",
+			evaluator_command: "bun test",
+			mutation_strategy: "LLM edit",
+			budget: {
+				max_iterations: 7,
+				max_time_seconds: 600,
+				max_tokens: 12000,
+				max_dollars: 3.5,
+			},
+			risk_policy: {
+				sandbox_only: true,
+				requires_approval: true,
+				network_denied: false,
+				secrets_denied: false,
+			},
+			constraints: {
+				metric_floors: { pass_rate: 0.5 },
+				metric_ceilings: { pass_rate: 0.99 },
+			},
+		});
+		expect(registered.isError).toBeUndefined();
+		const id = registered.content[0].text.match(
+			/Experiment ID: `([^`]+)`/,
+		)?.[1];
+		expect(id).toBeDefined();
+
+		const response = await handler<GetExperimentHandler>("get_experiment")({
+			experiment_id: id as string,
+			include_results: false,
+		});
+		expect(response.isError).toBeUndefined();
+		const lines = response.content[0].text.split("\n");
+		for (const expected of [
+			"## Run Controls",
+			"Acceptance Rule: strict-improvement",
+			"Stopping Conditions: budget-exhaustion",
+			"- max_iterations: 7",
+			"- max_time_seconds: 600",
+			"- max_tokens: 12000",
+			"- max_dollars: 3.5",
+			"- sandbox_only: true",
+			"- requires_approval: true",
+			"- network_denied: false",
+			"- secrets_denied: false",
+			'- metric_floors: {"pass_rate":0.5}',
+			'- metric_ceilings: {"pass_rate":0.99}',
+		]) {
+			expect(lines).toContain(expected);
+		}
+	});
+
+	it("renders unset budgets and default policy explicitly", async () => {
+		createExperiment({
+			id: "defaults",
+			project_path: "/fixture",
+			spec: validSpec(),
+		});
+		const response = await handler<GetExperimentHandler>("get_experiment")({
+			experiment_id: "defaults",
+			include_results: false,
+		});
+		const lines = response.content[0].text.split("\n");
+		expect(lines).toContain("- max_iterations: not set");
+		expect(lines).toContain("- max_dollars: not set");
+		expect(lines).toContain("- requires_approval: false");
+		expect(lines).toContain("- metric_floors: {}");
+	});
+});
+
+describe("log_result tool boundary", () => {
+	const iterationSchema = () => {
+		const shape = registeredTools().get("log_result")?.shape;
+		if (!shape) throw new Error("log_result schema missing");
+		return z.object(shape).shape.iteration;
+	};
+
+	it.each([0, 1, Number.MAX_SAFE_INTEGER])(
+		"accepts safe iteration %p",
+		(value) => {
+			expect(iterationSchema().safeParse(value).success).toBe(true);
+		},
+	);
+
+	it.each([-1, 1.5, Number.MAX_SAFE_INTEGER + 1, 2 ** 60, Number.NaN])(
+		"rejects unsafe iteration %p",
+		(value) => {
+			expect(iterationSchema().safeParse(value).success).toBe(false);
+		},
+	);
+
+	it("surfaces the DB safe-integer rejection through the real handler", async () => {
+		createExperiment({
+			id: "unsafe",
+			project_path: "/fixture",
+			spec: validSpec(),
+		});
+		const response = await logResultHandler()({
+			experiment_id: "unsafe",
+			iteration: 2 ** 60,
+			score: 1,
+			is_baseline: true,
+			change_description: "baseline",
+		});
+		expect(response.isError).toBe(true);
+		expect(response.content[0].text).toBe(
+			"Failed to log result: iteration must be a nonnegative safe integer",
+		);
+		expect(getExperiment("unsafe")?.status).toBe("scaffolded");
+	});
+
+	it("documents the scaffolded auto-start in tool descriptions", () => {
+		const tools = registeredTools();
+		expect(tools.get("log_result")?.description).toContain(
+			"automatically starts a scaffolded experiment",
+		);
+		expect(tools.get("update_experiment")?.description).toContain(
+			"automatically moves a scaffolded experiment to running",
+		);
 	});
 });

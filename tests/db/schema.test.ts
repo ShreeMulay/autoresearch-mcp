@@ -4,7 +4,7 @@
 
 import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -12,7 +12,12 @@ import {
 	getExperimentResults,
 	logExperimentResult,
 } from "../../src/db/experiments.js";
-import { getDb, resetDb } from "../../src/db/schema.js";
+import {
+	closeDb,
+	getActiveDbPath,
+	getDb,
+	resetDb,
+} from "../../src/db/schema.js";
 
 function legacySpec(
 	metricDirection?: "maximize" | "minimize",
@@ -194,24 +199,27 @@ describe("Schema migrations", () => {
 		expect(migrations[0].name).toBe("initial_schema");
 	});
 
-	it("is idempotent — re-running getDb() does not duplicate migrations", () => {
-		const db1 = getDb();
-		const count1 = (
-			db1.prepare("SELECT COUNT(*) as count FROM _migrations").get() as {
-				count: number;
-			}
-		).count;
+	it("is idempotent — reopening the same file-backed database does not duplicate migrations", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "autoresearch-idempotent-"));
+		const dbPath = join(dir, "reopen.db");
+		const migrationRows = () =>
+			getDb()
+				.prepare("SELECT version, name FROM _migrations ORDER BY version")
+				.all();
+		try {
+			resetDb(dbPath);
+			const first = migrationRows();
+			expect(first.length).toBeGreaterThanOrEqual(1);
+			closeDb();
 
-		// Simulate re-opening by resetting and re-getting
-		resetDb(":memory:");
-		const db2 = getDb();
-		const count2 = (
-			db2.prepare("SELECT COUNT(*) as count FROM _migrations").get() as {
-				count: number;
-			}
-		).count;
-
-		expect(count2).toBe(count1);
+			resetDb(dbPath);
+			expect(getActiveDbPath()).toBe(dbPath);
+			expect(migrationRows()).toEqual(first);
+		} finally {
+			closeDb();
+			resetDb(":memory:");
+			await rm(dir, { force: true, recursive: true });
+		}
 	});
 
 	it("creates all expected tables", () => {
@@ -318,14 +326,20 @@ describe("Schema migrations", () => {
 		}
 	});
 
-	it("sets WAL journal mode", () => {
-		const db = getDb();
-		const mode = db.prepare("PRAGMA journal_mode").get() as {
-			journal_mode: string;
-		};
-		// :memory: databases report "memory" and don't support WAL
-		// File-based databases should be "wal"
-		expect(["wal", "memory"]).toContain(mode.journal_mode.toLowerCase());
+	it("sets WAL journal mode on a file-backed database", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "autoresearch-wal-"));
+		const dbPath = join(dir, "wal.db");
+		try {
+			resetDb(dbPath);
+			const mode = getDb().prepare("PRAGMA journal_mode").get() as {
+				journal_mode: string;
+			};
+			expect(mode.journal_mode.toLowerCase()).toBe("wal");
+		} finally {
+			closeDb();
+			resetDb(":memory:");
+			await rm(dir, { force: true, recursive: true });
+		}
 	});
 
 	it("sets busy_timeout to 5000ms", () => {
@@ -347,14 +361,16 @@ describe("Schema migrations", () => {
 
 describe("Configurable DB path", () => {
 	it("uses AUTORESEARCH_DB_PATH env var when set", async () => {
-		const customPath = "/tmp/autoresearch-test.db";
+		const dir = await mkdtemp(join(tmpdir(), "autoresearch-env-path-"));
+		const customPath = join(dir, "custom.db");
+		const hadPrevious = Object.hasOwn(process.env, "AUTORESEARCH_DB_PATH");
+		const previous = process.env.AUTORESEARCH_DB_PATH;
 		process.env.AUTORESEARCH_DB_PATH = customPath;
 
 		try {
 			resetDb();
+			expect(getActiveDbPath()).toBe(customPath);
 			const db = getDb();
-			// Verify the DB is at the custom path by checking it exists
-			// and can write
 			db.prepare("CREATE TABLE IF NOT EXISTS test_env (id INTEGER)").run();
 			const tables = db
 				.prepare(
@@ -362,16 +378,21 @@ describe("Configurable DB path", () => {
 				)
 				.all() as { name: string }[];
 			expect(tables.length).toBe(1);
+			await access(customPath);
 		} finally {
-			Reflect.deleteProperty(process.env, "AUTORESEARCH_DB_PATH");
-			// Clean up
-			try {
-				const fs = await import("node:fs/promises");
-				await fs.unlink(customPath);
-			} catch {
-				// ignore cleanup errors
+			if (hadPrevious) {
+				process.env.AUTORESEARCH_DB_PATH = previous;
+			} else {
+				Reflect.deleteProperty(process.env, "AUTORESEARCH_DB_PATH");
 			}
+			// Close before removing so the main file, -wal, and -shm are released.
+			closeDb();
+			resetDb(":memory:");
+			await rm(dir, { force: true, recursive: true });
 		}
+		await expect(access(customPath)).rejects.toThrow();
+		await expect(access(`${customPath}-wal`)).rejects.toThrow();
+		await expect(access(`${customPath}-shm`)).rejects.toThrow();
 	});
 });
 
