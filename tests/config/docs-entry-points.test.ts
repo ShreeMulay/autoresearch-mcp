@@ -155,6 +155,20 @@ describe("documentation entry points", () => {
 			readme.indexOf(OPEN_MARKER),
 		);
 		expect(readme).toContain("git clone");
+		// The first active (uncommented) clone must be the public HTTPS URL;
+		// the private Forgejo SSH remote may only appear as a commented alternative.
+		const quickStart = readme.slice(
+			readme.indexOf(sourceHeading),
+			readme.indexOf(OPEN_MARKER),
+		);
+		const activeClones = quickStart
+			.split("\n")
+			.map((line) => line.trim())
+			.filter((line) => line.startsWith("git clone"));
+		expect(activeClones).toContain(
+			"git clone https://github.com/ShreeMulay/autoresearch-mcp.git /absolute/path/to/autoresearch-mcp",
+		);
+		expect(activeClones[0]).not.toMatch(/^git clone\s+ssh:\/\//);
 		expect(readme).toContain("git checkout <reviewed-commit-or-tag>");
 		expect(readme).toContain("bun install --frozen-lockfile");
 		expect(readme).toContain('"command": "bun"');

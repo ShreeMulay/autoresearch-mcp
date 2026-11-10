@@ -33,9 +33,10 @@ Runtime requirements:
 `autoresearch-mcp` is not yet published to npm, so install from a reviewed source checkout. Pin an explicit revision or tag instead of tracking a moving branch:
 
 ```bash
-# Forgejo (primary) or the GitHub mirror
-git clone ssh://git@git.thekidneyexperts.com:2222/thekidneyexperts/autoresearch-mcp.git /absolute/path/to/autoresearch-mcp
-# git clone https://github.com/ShreeMulay/autoresearch-mcp.git /absolute/path/to/autoresearch-mcp
+# Public GitHub repository; the Forgejo SSH remote below is internal-only
+git clone https://github.com/ShreeMulay/autoresearch-mcp.git /absolute/path/to/autoresearch-mcp
+# Internal (Forgejo, private SSH access required):
+# git clone ssh://git@git.thekidneyexperts.com:2222/thekidneyexperts/autoresearch-mcp.git /absolute/path/to/autoresearch-mcp
 cd /absolute/path/to/autoresearch-mcp
 git checkout <reviewed-commit-or-tag>
 bun install --frozen-lockfile

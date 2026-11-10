@@ -82,7 +82,7 @@ Choose one setup path: `scaffold_experiment` creates files **and** registers the
 
 `log_result` updates SQLite only. `results.tsv` is manually maintained; there is no automatic synchronization or import between the TSV and SQLite.
 
-Lifecycle: `scaffold_experiment` registers the experiment with status `scaffolded`. The first successful `log_result` (normally the iteration 0 baseline) automatically moves it to `running` and sets `started_at`; no separate "running" update is needed. Logging never changes a paused, completed, or failed experiment. Finish with `update_experiment(status="completed")`. `iteration` must be a safe nonnegative integer.
+Lifecycle: `scaffold_experiment` registers the experiment with status `scaffolded`. The first successful `log_result` (normally the iteration 0 baseline) automatically moves it to `running` and sets `started_at`; no separate "running" update is needed. Logging never changes the status of a paused, completed, or failed experiment, but `log_result` still adds or replaces results on them: completed and failed are final for status transitions, not for results. Finish with `update_experiment(status="completed")`. `iteration` must be a safe nonnegative integer.
 
 Bounded continuation: keep iterating only while within the declared budget, and stop at the budget, an approval point (`risk_policy.requires_approval`), a safety concern, or a supervisor's request. Budgets and approval requirements are operator instructions recorded with the experiment; the server does not enforce them, so the agent must.
 

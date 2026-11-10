@@ -224,6 +224,30 @@ describe("published package bins", () => {
 
 		expect(exitCode).toBe(0);
 		expect(stdout).toContain("Usage");
+
+		// The package is not yet on npm: the source-checkout form must lead,
+		// and registry forms may only appear under the publication label.
+		const lines = stdout.split("\n");
+		const sourceForm =
+			"node /absolute/path/to/autoresearch-mcp/bin/autoresearch-install-skill [--target <platform>] [--dry-run]";
+		const sourceIndex = lines.findIndex((line) => line.includes(sourceForm));
+		const labelIndex = lines.findIndex((line) =>
+			line.includes(
+				"After npm publication only (autoresearch-mcp is not yet on npm):",
+			),
+		);
+		const registryIndexes = lines
+			.map((line, index) =>
+				/\bnpx\b|autoresearch-mcp install-skill/.test(line) ? index : -1,
+			)
+			.filter((index) => index !== -1);
+
+		expect(sourceIndex).toBeGreaterThan(-1);
+		expect(labelIndex).toBeGreaterThan(sourceIndex);
+		expect(registryIndexes.length).toBeGreaterThan(0);
+		for (const index of registryIndexes) {
+			expect(index).toBeGreaterThan(labelIndex);
+		}
 	});
 
 	it.each([
