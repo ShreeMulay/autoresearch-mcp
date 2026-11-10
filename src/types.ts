@@ -131,28 +131,43 @@ export type TechniqueSpec = z.infer<typeof TechniqueSpecSchema>;
 
 const NonnegativeFiniteNumber = z.number().finite().nonnegative();
 
-export const BudgetSchema = z.object({
-	max_iterations: z
+/**
+ * Budget integers for NEW input (tool arguments, published JSON Schema).
+ * zod 4 `.int()` also requires a safe integer (<= Number.MAX_SAFE_INTEGER).
+ */
+const InputBudgetInteger = () => z.number().finite().int().nonnegative();
+
+/**
+ * Budget integers for ALREADY-PERSISTED specs. zod 3 `.int()` accepted any
+ * finite integer (e.g. 2**53, 1e300), and such values may already be stored.
+ * Reparsing them must keep working, so no safe-integer bound applies here.
+ */
+const StoredBudgetInteger = () =>
+	z
 		.number()
 		.finite()
-		.int()
-		.nonnegative()
-		.optional()
-		.describe("Maximum experiment iterations"),
-	max_time_seconds: NonnegativeFiniteNumber.optional().describe(
-		"Maximum wall-clock time",
-	),
-	max_tokens: z
-		.number()
-		.finite()
-		.int()
-		.nonnegative()
-		.optional()
-		.describe("Maximum LLM tokens to spend"),
-	max_dollars: NonnegativeFiniteNumber.optional().describe(
-		"Maximum dollar cost",
-	),
-});
+		.refine(Number.isInteger, { message: "Expected integer" })
+		.nonnegative();
+
+function budgetSchemaWith(integer: () => z.ZodNumber) {
+	return z.object({
+		max_iterations: integer()
+			.optional()
+			.describe("Maximum experiment iterations"),
+		max_time_seconds: NonnegativeFiniteNumber.optional().describe(
+			"Maximum wall-clock time",
+		),
+		max_tokens: integer().optional().describe("Maximum LLM tokens to spend"),
+		max_dollars: NonnegativeFiniteNumber.optional().describe(
+			"Maximum dollar cost",
+		),
+	});
+}
+
+export const BudgetSchema = budgetSchemaWith(InputBudgetInteger);
+
+/** Budget schema for reparsing persisted specs; see StoredBudgetInteger. */
+export const StoredBudgetSchema = budgetSchemaWith(StoredBudgetInteger);
 
 export const RiskPolicySchema = z.object({
 	sandbox_only: z
@@ -208,47 +223,63 @@ export const StoppingCondition = z.enum([
 ]);
 export type StoppingCondition = z.infer<typeof StoppingCondition>;
 
-export const ExperimentSpecSchema = z.object({
-	target_artifact: z
-		.string()
-		.describe("What is being optimized (prompt, code file, config, etc.)"),
-	artifact_type: z
-		.enum(["prompt", "code", "config", "content", "other"])
-		.default("other"),
-	technique: TechniqueSpecSchema.optional().describe(
-		"Composed technique specification",
-	),
-	recipe_id: RecipeId.optional().describe("Shorthand: use a predefined recipe"),
-	mutation_strategy: z
-		.string()
-		.describe(
-			"How changes are proposed (LLM edit, random, evolutionary, etc.)",
+function experimentSpecShape(budget: typeof BudgetSchema) {
+	return {
+		target_artifact: z
+			.string()
+			.describe("What is being optimized (prompt, code file, config, etc.)"),
+		artifact_type: z
+			.enum(["prompt", "code", "config", "content", "other"])
+			.default("other"),
+		technique: TechniqueSpecSchema.optional().describe(
+			"Composed technique specification",
 		),
-	evaluator_command: z
-		.string()
-		.describe(
-			"Command or script that returns a score (single float to stdout)",
+		recipe_id: RecipeId.optional().describe(
+			"Shorthand: use a predefined recipe",
 		),
-	metric_name: z
-		.string()
-		.describe("Name of the primary metric (e.g., val_bpb, test_pass_rate)"),
-	metric_direction: z.enum(["minimize", "maximize"]).default("maximize"),
-	acceptance_rule: AcceptanceRule.default("strict-improvement"),
-	budget: BudgetSchema.default({}),
-	environment: z
-		.object({
-			repo_sha: z.string().optional(),
-			dataset_version: z.string().optional(),
-			model_version: z.string().optional(),
-			dependency_lock: z.string().optional(),
-		})
-		.default({}),
-	stopping_conditions: z
-		.array(StoppingCondition)
-		.default(["budget-exhaustion"]),
-	risk_policy: RiskPolicySchema.default({}),
-	constraints: ConstraintsSchema.default({}),
-});
+		mutation_strategy: z
+			.string()
+			.describe(
+				"How changes are proposed (LLM edit, random, evolutionary, etc.)",
+			),
+		evaluator_command: z
+			.string()
+			.describe(
+				"Command or script that returns a score (single float to stdout)",
+			),
+		metric_name: z
+			.string()
+			.describe("Name of the primary metric (e.g., val_bpb, test_pass_rate)"),
+		metric_direction: z.enum(["minimize", "maximize"]).default("maximize"),
+		acceptance_rule: AcceptanceRule.default("strict-improvement"),
+		budget: budget.prefault({}),
+		environment: z
+			.object({
+				repo_sha: z.string().optional(),
+				dataset_version: z.string().optional(),
+				model_version: z.string().optional(),
+				dependency_lock: z.string().optional(),
+			})
+			.default({}),
+		stopping_conditions: z
+			.array(StoppingCondition)
+			.default(["budget-exhaustion"]),
+		risk_policy: RiskPolicySchema.prefault({}),
+		constraints: ConstraintsSchema.prefault({}),
+	};
+}
+
+/** Strict spec schema for new input and published JSON Schema. */
+export const ExperimentSpecSchema = z.object(experimentSpecShape(BudgetSchema));
+
+/**
+ * Spec schema for reparsing already-persisted specs (migrations and reads).
+ * Identical to ExperimentSpecSchema except that budget integers keep zod 3's
+ * acceptance of finite integers beyond Number.MAX_SAFE_INTEGER.
+ */
+export const StoredExperimentSpecSchema = z.object(
+	experimentSpecShape(StoredBudgetSchema),
+);
 export type ExperimentSpec = z.infer<typeof ExperimentSpecSchema>;
 
 // ============================================================

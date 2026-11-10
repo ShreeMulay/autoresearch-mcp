@@ -62,7 +62,7 @@ type RegisterExperimentHandler = (args: {
 
 interface RegisteredTool {
 	description: string;
-	shape: z.ZodRawShape;
+	shape: Record<string, z.ZodType>;
 	handler: unknown;
 }
 
@@ -73,7 +73,7 @@ function registeredTools(): Map<string, RegisteredTool> {
 			const [name, description, shape, handler] = args;
 			tools.set(name as string, {
 				description: description as string,
-				shape: shape as z.ZodRawShape,
+				shape: shape as Record<string, z.ZodType>,
 				handler,
 			});
 		},

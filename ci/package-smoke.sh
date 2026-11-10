@@ -261,24 +261,57 @@ env -i HOME="$WORK_DIR/home" PATH="$PATH" npm_config_userconfig=/dev/null npm_co
   npm audit --omit=dev
 env -i HOME="$WORK_DIR/home" PATH="$PATH" npm_config_userconfig=/dev/null npm_config_update_notifier=false \
   npm ls --all --json > "$WORK_DIR/consumer-graph.json"
-node - "$WORK_DIR/consumer-graph.json" <<'EOF'
+node - "$WORK_DIR/consumer-graph.json" "$WORK_DIR/consumer/node_modules" <<'EOF'
 const fs = require("node:fs");
+const path = require("node:path");
 const graph = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-const floors = { "@hono/node-server": "1.19.15", "body-parser": "2.3.0", "fast-uri": "3.1.8", "hono": "4.13.7", "ip-address": "10.7.1", "qs": "6.16.0" };
+// Every installed occurrence of each package anywhere in the consumer tree must meet its floor:
+// both the logical npm graph and every physical node_modules copy on disk are checked.
+const floors = { "@hono/node-server": "2.1.6", "body-parser": "2.4.0", "fast-uri": "3.1.9", "hono": "4.13.17", "ip-address": "10.7.6", "qs": "6.16.1", "zod": "4.6.7" };
 const found = new Map(Object.keys(floors).map((name) => [name, []]));
 const visit = (node) => {
   for (const [name, dependency] of Object.entries(node.dependencies ?? {})) {
-    if (found.has(name) && dependency.version) found.get(name).push(dependency.version);
+    if (found.has(name)) {
+      if (!dependency.version) throw new Error(`consumer graph has ${name} without a resolved version`);
+      found.get(name).push(dependency.version);
+    }
     visit(dependency);
   }
 };
+const scanInstalled = (dir) => {
+  if (!fs.existsSync(dir)) return;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    if (entry.name.startsWith("@")) {
+      for (const scoped of fs.readdirSync(path.join(dir, entry.name), { withFileTypes: true })) {
+        if (scoped.isDirectory()) inspectPackage(path.join(dir, entry.name, scoped.name));
+      }
+    } else {
+      inspectPackage(path.join(dir, entry.name));
+    }
+  }
+};
+const inspectPackage = (packageDir) => {
+  const manifestPath = path.join(packageDir, "package.json");
+  if (fs.existsSync(manifestPath)) {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    if (found.has(manifest.name)) found.get(manifest.name).push(manifest.version);
+  }
+  scanInstalled(path.join(packageDir, "node_modules"));
+};
 const compare = (left, right) => {
-  const a = left.split(".").map(Number);
-  const b = right.split(".").map(Number);
+  const core = (version) => {
+    const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+    if (!match) throw new Error(`unparseable version ${version}`);
+    return match.slice(1).map(Number);
+  };
+  const a = core(left);
+  const b = core(right);
   for (let i = 0; i < 3; i++) if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) - (b[i] ?? 0);
   return 0;
 };
 visit(graph);
+scanInstalled(process.argv[3]);
 for (const [name, floor] of Object.entries(floors)) {
   const versions = found.get(name);
   if (versions.length === 0) throw new Error(`consumer graph is missing ${name}`);

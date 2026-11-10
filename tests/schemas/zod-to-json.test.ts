@@ -31,4 +31,22 @@ describe("zodToJsonSchema", () => {
 			required: ["name"],
 		});
 	});
+
+	it("keeps the unnamed envelope and inlines reused sub-schemas", () => {
+		const shared = z.number().min(0);
+		const jsonSchema = zodToJsonSchema(z.object({ a: shared, b: shared }));
+
+		expect(Object.keys(jsonSchema)).toEqual([
+			"type",
+			"properties",
+			"required",
+			"$schema",
+		]);
+		expect(jsonSchema.$schema).toBe("http://json-schema.org/draft-07/schema#");
+		expect(JSON.stringify(jsonSchema)).not.toContain("$ref");
+		expect(jsonSchema.properties).toEqual({
+			a: { type: "number", minimum: 0 },
+			b: { type: "number", minimum: 0 },
+		});
+	});
 });
