@@ -245,18 +245,18 @@ test("dependency remediation floors remain blocking package contracts", async ()
 		await readFile(join(root, "package.json"), "utf8"),
 	) as { resolutions: Record<string, string> };
 	expect(packageJson.resolutions).toEqual({
-		"@hono/node-server": "1.19.15",
-		"body-parser": "2.3.0",
-		"fast-uri": "3.1.8",
-		hono: "4.13.7",
-		"ip-address": "10.7.1",
-		qs: "6.16.0",
+		"@hono/node-server": "2.1.6",
+		"body-parser": "2.4.0",
+		"fast-uri": "3.1.9",
+		hono: "4.13.17",
+		"ip-address": "10.7.6",
+		qs: "6.16.1",
 	});
 
 	const smoke = await readFile(join(root, "ci/package-smoke.sh"), "utf8");
 	const consumerFloors = {
 		...packageJson.resolutions,
-		"fast-uri": "3.1.8",
+		zod: "4.6.7",
 	};
 	for (const [name, floor] of Object.entries(consumerFloors)) {
 		expect(smoke).toContain(`"${name}": "${floor}"`);

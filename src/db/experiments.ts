@@ -8,6 +8,7 @@ import {
 	type ExperimentSpec,
 	ExperimentSpecSchema,
 	type ExperimentStatus,
+	StoredExperimentSpecSchema,
 } from "../types.js";
 import { getDb } from "./schema.js";
 
@@ -25,7 +26,9 @@ export function createExperiment(exp: {
 	status?: string;
 }): void {
 	const db = getDb();
-	const spec = parseExperimentSpec(exp.spec);
+	// New specs are written with the strict schema (safe-integer budgets),
+	// matching what register_experiment/scaffold_experiment already accept.
+	const spec = parseExperimentSpec(exp.spec, ExperimentSpecSchema);
 	db.prepare(
 		`INSERT INTO experiments (id, spec, project_path, project_name, status, created_at, updated_at)
      VALUES ($id, $spec, $project_path, $project_name, $status, datetime('now'), datetime('now'))`,
@@ -339,7 +342,10 @@ function assertFiniteMetadata(value: unknown, seen = new Set<object>()): void {
 // Helper: row to Experiment
 // ============================================================
 
-function parseExperimentSpec(spec: string | ExperimentSpec): ExperimentSpec {
+function parseExperimentSpec(
+	spec: string | ExperimentSpec,
+	schema: typeof ExperimentSpecSchema | typeof StoredExperimentSpecSchema,
+): ExperimentSpec {
 	let raw: unknown = spec;
 
 	if (typeof spec === "string") {
@@ -351,7 +357,7 @@ function parseExperimentSpec(spec: string | ExperimentSpec): ExperimentSpec {
 		}
 	}
 
-	const parsed = ExperimentSpecSchema.safeParse(raw);
+	const parsed = schema.safeParse(raw);
 	if (!parsed.success) {
 		throw new Error(`Invalid experiment spec: ${parsed.error.message}`);
 	}
@@ -495,7 +501,12 @@ function assertStatusTransition(current: string, next: string): void {
 }
 
 function rowToExperiment(row: Record<string, unknown>): Experiment {
-	const spec = parseExperimentSpec(row.spec as string);
+	// Already-persisted specs may hold integers beyond MAX_SAFE_INTEGER that
+	// zod 3 accepted; reparse them with the stored-spec schema.
+	const spec = parseExperimentSpec(
+		row.spec as string,
+		StoredExperimentSpecSchema,
+	);
 
 	return {
 		id: row.id as string,

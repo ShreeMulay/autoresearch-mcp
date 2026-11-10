@@ -1,0 +1,22 @@
+{
+	"build defaults": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompts/system.md\",\"artifact_type\":\"prompt\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"build empty nested": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompts/system.md\",\"artifact_type\":\"prompt\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"build partial nested": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompts/system.md\",\"artifact_type\":\"prompt\",\"recipe_id\":\"code-performance\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"minimize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{\"max_iterations\":5,\"max_dollars\":1},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":true,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{\"latency\":10}}}"
+	},
+	"build safe max budget": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompts/system.md\",\"artifact_type\":\"prompt\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{\"max_tokens\":9007199254740991},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"build unsafe 2**53 budget": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompts/system.md\",\"artifact_type\":\"prompt\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{\"max_iterations\":9007199254740992},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	}
+}

@@ -8,9 +8,9 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
-import { ExperimentSpecSchema } from "../types.js";
+import { StoredExperimentSpecSchema } from "../types.js";
 
-const Migration3ExperimentSpecSchema = ExperimentSpecSchema.extend({
+const Migration3ExperimentSpecSchema = StoredExperimentSpecSchema.extend({
 	acceptance_rule: z
 		.enum([
 			"strict-improvement",
@@ -283,7 +283,7 @@ function migrateAcceptanceRuleCutover(db: Database): void {
 			);
 		}
 		const migrated = { ...spec, acceptance_rule: "strict-improvement" };
-		const parsed = ExperimentSpecSchema.safeParse(migrated);
+		const parsed = StoredExperimentSpecSchema.safeParse(migrated);
 		if (!parsed.success) {
 			throw new Error(
 				`Cannot migrate experiment ${experiment.id}: ${parsed.error.message}`,

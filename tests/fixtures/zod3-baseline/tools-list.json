@@ -1,0 +1,537 @@
+[
+	{
+		"name": "get_experiment",
+		"description": "Get experiment details, optionally including iteration results.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"experiment_id": {
+					"type": "string",
+					"description": "Experiment ID"
+				},
+				"include_results": {
+					"type": "boolean",
+					"default": false,
+					"description": "Include experiment results table"
+				}
+			},
+			"required": ["experiment_id"],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"execution": {
+			"taskSupport": "forbidden"
+		}
+	},
+	{
+		"name": "get_server_info",
+		"description": "Get autoresearch-mcp server metadata: version, catalog stats, and configuration.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {},
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"execution": {
+			"taskSupport": "forbidden"
+		}
+	},
+	{
+		"name": "get_technique",
+		"description": "Get full details for a specific autoresearch technique by ID. Returns description, when to use, core pattern, examples, related techniques, and composition info.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Technique ID (e.g., 'hill-climbing', 'prompt-optimization', 'single-ratchet')"
+				}
+			},
+			"required": ["id"],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"execution": {
+			"taskSupport": "forbidden"
+		}
+	},
+	{
+		"name": "get_template",
+		"description": "Return a recipe template file or generate a default template when none exists.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"recipe_id": {
+					"type": "string",
+					"description": "Recipe ID"
+				},
+				"template_name": {
+					"type": "string",
+					"description": "Template filename, for example program.md or eval.sh"
+				}
+			},
+			"required": ["recipe_id", "template_name"],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"execution": {
+			"taskSupport": "forbidden"
+		}
+	},
+	{
+		"name": "list_experiments",
+		"description": "List tracked experiments with optional filtering.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"status": {
+					"type": "string",
+					"enum": ["scaffolded", "running", "paused", "completed", "failed"],
+					"description": "Optional status filter"
+				},
+				"project": {
+					"type": "string",
+					"description": "Optional project filter"
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 10,
+					"description": "Maximum rows"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"execution": {
+			"taskSupport": "forbidden"
+		}
+	},
+	{
+		"name": "log_result",
+		"description": "Log a single experiment iteration result and return updated totals. A successfully logged result automatically starts a scaffolded experiment (status becomes running and started_at is set once); other statuses are left unchanged, and rejected logs change nothing.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"experiment_id": {
+					"type": "string",
+					"description": "Experiment ID"
+				},
+				"iteration": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 9007199254740991,
+					"description": "Iteration number (nonnegative safe integer)"
+				},
+				"score": {
+					"type": "number",
+					"description": "Observed score"
+				},
+				"improved": {
+					"type": "boolean",
+					"description": "Optional assertion that this iteration improved the champion"
+				},
+				"change_description": {
+					"type": "string",
+					"description": "Human-readable description of the attempted change"
+				},
+				"duration_seconds": {
+					"type": "number",
+					"minimum": 0,
+					"description": "Optional wall time"
+				},
+				"cost_tokens": {
+					"type": "number",
+					"minimum": 0,
+					"description": "Optional token cost"
+				},
+				"cost_dollars": {
+					"type": "number",
+					"minimum": 0,
+					"description": "Optional dollar cost"
+				},
+				"is_baseline": {
+					"type": "boolean",
+					"description": "Mark this result as the baseline measurement taken before any changes"
+				}
+			},
+			"required": ["experiment_id", "iteration", "score", "change_description"],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"execution": {
+			"taskSupport": "forbidden"
+		}
+	},
+	{
+		"name": "register_experiment",
+		"description": "Register a new experiment in the autoresearch tracker.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"project_path": {
+					"type": "string",
+					"description": "Absolute or relative project path"
+				},
+				"project_name": {
+					"type": "string",
+					"description": "Optional project name"
+				},
+				"metric_name": {
+					"type": "string",
+					"description": "Primary metric name"
+				},
+				"metric_direction": {
+					"type": "string",
+					"enum": ["minimize", "maximize"],
+					"default": "maximize",
+					"description": "Whether lower or higher scores are better"
+				},
+				"target_artifact": {
+					"type": "string",
+					"description": "What the experiment is optimizing"
+				},
+				"evaluator_command": {
+					"type": "string",
+					"description": "Command that prints a single score to stdout"
+				},
+				"mutation_strategy": {
+					"type": "string",
+					"default": "LLM edit",
+					"description": "How mutations are proposed"
+				},
+				"recipe_id": {
+					"type": "string",
+					"enum": [
+						"prompt-optimization",
+						"code-performance",
+						"config-tuning",
+						"content-revision",
+						"test-amplification",
+						"ml-training",
+						"literature-synthesis",
+						"general-ratchet"
+					],
+					"description": "Optional recipe ID"
+				},
+				"budget": {
+					"type": "object",
+					"properties": {
+						"max_iterations": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "Maximum experiment iterations"
+						},
+						"max_time_seconds": {
+							"type": "number",
+							"minimum": 0,
+							"description": "Maximum wall-clock time"
+						},
+						"max_tokens": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "Maximum LLM tokens to spend"
+						},
+						"max_dollars": {
+							"$ref": "#/properties/budget/properties/max_time_seconds",
+							"description": "Maximum dollar cost"
+						}
+					},
+					"additionalProperties": false,
+					"description": "Optional experiment budget"
+				},
+				"risk_policy": {
+					"type": "object",
+					"properties": {
+						"sandbox_only": {
+							"type": "boolean",
+							"default": false,
+							"description": "Must run in sandboxed environment"
+						},
+						"requires_approval": {
+							"type": "boolean",
+							"default": false,
+							"description": "Human approval needed per iteration"
+						},
+						"network_denied": {
+							"type": "boolean",
+							"default": true,
+							"description": "No network access during execution"
+						},
+						"secrets_denied": {
+							"type": "boolean",
+							"default": true,
+							"description": "No access to env secrets"
+						}
+					},
+					"additionalProperties": false,
+					"description": "Optional execution risk policy"
+				},
+				"constraints": {
+					"type": "object",
+					"properties": {
+						"metric_floors": {
+							"type": "object",
+							"additionalProperties": {
+								"type": "number"
+							},
+							"default": {},
+							"description": "Minimum acceptable values for metrics"
+						},
+						"metric_ceilings": {
+							"type": "object",
+							"additionalProperties": {
+								"type": "number"
+							},
+							"default": {},
+							"description": "Maximum acceptable values for metrics"
+						}
+					},
+					"additionalProperties": false,
+					"description": "Optional metric floor and ceiling constraints"
+				},
+				"notes": {
+					"type": "string",
+					"description": "Optional experiment notes"
+				}
+			},
+			"required": [
+				"project_path",
+				"metric_name",
+				"target_artifact",
+				"evaluator_command"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"execution": {
+			"taskSupport": "forbidden"
+		}
+	},
+	{
+		"name": "scaffold_experiment",
+		"description": "Create autoresearch scaffolding files for a recipe and register the experiment.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"recipe_id": {
+					"type": "string",
+					"description": "Recipe ID to scaffold"
+				},
+				"project_path": {
+					"type": "string",
+					"description": "Project directory where files should be created"
+				},
+				"metric_name": {
+					"type": "string",
+					"description": "Primary metric for the experiment"
+				},
+				"metric_direction": {
+					"type": "string",
+					"enum": ["minimize", "maximize"],
+					"default": "maximize",
+					"description": "Whether lower or higher scores are better"
+				},
+				"target_file": {
+					"type": "string",
+					"description": "Optional target file or artifact path"
+				},
+				"custom_instructions": {
+					"type": "string",
+					"description": "Optional additional instructions for the program"
+				},
+				"overwrite": {
+					"type": "boolean",
+					"default": false,
+					"description": "Overwrite existing autoresearch scaffold files"
+				},
+				"budget": {
+					"type": "object",
+					"properties": {
+						"max_iterations": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "Maximum experiment iterations"
+						},
+						"max_time_seconds": {
+							"type": "number",
+							"minimum": 0,
+							"description": "Maximum wall-clock time"
+						},
+						"max_tokens": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "Maximum LLM tokens to spend"
+						},
+						"max_dollars": {
+							"$ref": "#/properties/budget/properties/max_time_seconds",
+							"description": "Maximum dollar cost"
+						}
+					},
+					"additionalProperties": false,
+					"description": "Optional experiment budget"
+				},
+				"risk_policy": {
+					"type": "object",
+					"properties": {
+						"sandbox_only": {
+							"type": "boolean",
+							"default": false,
+							"description": "Must run in sandboxed environment"
+						},
+						"requires_approval": {
+							"type": "boolean",
+							"default": false,
+							"description": "Human approval needed per iteration"
+						},
+						"network_denied": {
+							"type": "boolean",
+							"default": true,
+							"description": "No network access during execution"
+						},
+						"secrets_denied": {
+							"type": "boolean",
+							"default": true,
+							"description": "No access to env secrets"
+						}
+					},
+					"additionalProperties": false,
+					"description": "Optional execution risk policy"
+				},
+				"constraints": {
+					"type": "object",
+					"properties": {
+						"metric_floors": {
+							"type": "object",
+							"additionalProperties": {
+								"type": "number"
+							},
+							"default": {},
+							"description": "Minimum acceptable values for metrics"
+						},
+						"metric_ceilings": {
+							"type": "object",
+							"additionalProperties": {
+								"type": "number"
+							},
+							"default": {},
+							"description": "Maximum acceptable values for metrics"
+						}
+					},
+					"additionalProperties": false,
+					"description": "Optional metric floor and ceiling constraints"
+				}
+			},
+			"required": ["recipe_id", "project_path", "metric_name"],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"execution": {
+			"taskSupport": "forbidden"
+		}
+	},
+	{
+		"name": "search_techniques",
+		"description": "Search autoresearch techniques by natural language query. If query is empty, lists all techniques. Returns ranked results from the composable catalog (strategies, evaluators, patterns, recipes).",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"query": {
+					"type": "string",
+					"default": "",
+					"description": "Search query. Empty = list all. Examples: 'optimize prompts overnight', 'measure code performance'"
+				},
+				"layer": {
+					"type": "string",
+					"enum": ["strategy", "evaluator", "pattern", "recipe"],
+					"description": "Filter by catalog layer"
+				},
+				"tags": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 64
+					},
+					"maxItems": 20,
+					"description": "Filter by tags (AND logic)"
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 50,
+					"default": 10,
+					"description": "Max results to return"
+				}
+			},
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"execution": {
+			"taskSupport": "forbidden"
+		}
+	},
+	{
+		"name": "suggest_technique",
+		"description": "Describe your optimization problem and get a recommendation for which autoresearch technique to use. Returns a composed recipe (strategy + evaluator + pattern) with rationale.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"problem": {
+					"type": "string",
+					"description": "What you are trying to optimize or research. Be specific about your domain, metric, and constraints."
+				},
+				"has_scalar_metric": {
+					"type": "boolean",
+					"description": "Do you have a single number that defines success?"
+				},
+				"max_experiment_duration": {
+					"type": "string",
+					"description": "How long can a single experiment take? (e.g., '5 minutes', '1 hour')"
+				},
+				"needs_overnight": {
+					"type": "boolean",
+					"description": "Do you need a human-supervised overnight batch workflow?"
+				},
+				"domain": {
+					"type": "string",
+					"description": "Domain (e.g., 'prompt-engineering', 'ml-training', 'code-optimization')"
+				}
+			},
+			"required": ["problem"],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"execution": {
+			"taskSupport": "forbidden"
+		}
+	},
+	{
+		"name": "update_experiment",
+		"description": "Update experiment status and notes. Valid transitions: scaffolded -> running|failed; running -> paused|completed|failed; paused -> running|completed|failed; completed and failed are terminal. The first successfully logged result (log_result) automatically moves a scaffolded experiment to running, so after logging a baseline you can set completed directly.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"experiment_id": {
+					"type": "string",
+					"description": "Experiment ID"
+				},
+				"status": {
+					"type": "string",
+					"enum": ["scaffolded", "running", "paused", "completed", "failed"],
+					"description": "Optional new experiment status"
+				},
+				"notes": {
+					"type": "string",
+					"description": "Optional replacement notes"
+				}
+			},
+			"required": ["experiment_id"],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		},
+		"execution": {
+			"taskSupport": "forbidden"
+		}
+	}
+]

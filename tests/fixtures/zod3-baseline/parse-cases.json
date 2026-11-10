@@ -1,0 +1,334 @@
+{
+	"spec minimal": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec full non-default": {
+		"success": true,
+		"output": "{\"target_artifact\":\"src/hot.ts\",\"artifact_type\":\"code\",\"technique\":{\"search_strategy\":\"evolutionary\",\"evaluator\":\"benchmark-harness\",\"execution_pattern\":\"two-loop\",\"domain_template\":\"code-performance\"},\"recipe_id\":\"code-performance\",\"mutation_strategy\":\"random\",\"evaluator_command\":\"bun bench.ts\",\"metric_name\":\"latency_ms\",\"metric_direction\":\"minimize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{\"max_iterations\":7,\"max_time_seconds\":12.5,\"max_tokens\":1000,\"max_dollars\":0.25},\"environment\":{\"repo_sha\":\"abc123\",\"dataset_version\":\"v2\",\"model_version\":\"m1\",\"dependency_lock\":\"bun.lock\"},\"stopping_conditions\":[\"plateau\",\"max-iterations\"],\"risk_policy\":{\"sandbox_only\":true,\"requires_approval\":true,\"network_denied\":false,\"secrets_denied\":false},\"constraints\":{\"metric_floors\":{\"accuracy\":0.5},\"metric_ceilings\":{\"latency_ms\":100,\"accuracy\":0.9}}}"
+	},
+	"spec unknown extra key": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec unknown nested key in budget and risk_policy": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{\"max_iterations\":1},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":true,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec missing required fields": {
+		"success": false,
+		"paths": [["mutation_strategy"], ["evaluator_command"], ["metric_name"]]
+	},
+	"spec legacy acceptance_rule pareto": {
+		"success": false,
+		"paths": [["acceptance_rule"]]
+	},
+	"spec invalid enums": {
+		"success": false,
+		"paths": [
+			["artifact_type"],
+			["recipe_id"],
+			["metric_direction"],
+			["stopping_conditions", 0]
+		]
+	},
+	"spec invalid technique": {
+		"success": false,
+		"paths": [
+			["technique", "search_strategy"],
+			["technique", "evaluator"],
+			["technique", "execution_pattern"]
+		]
+	},
+	"spec null budget": {
+		"success": false,
+		"paths": [["budget"]]
+	},
+	"spec risk_policy wrong types": {
+		"success": false,
+		"paths": [["risk_policy", "sandbox_only"]]
+	},
+	"spec empty stopping_conditions and environment partial": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{\"repo_sha\":\"x\"},\"stopping_conditions\":[],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec not an object": {
+		"success": false,
+		"paths": [[]]
+	},
+	"spec array": {
+		"success": false,
+		"paths": [[]]
+	},
+	"RiskPolicySchema empty": {
+		"success": true,
+		"output": "{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true}"
+	},
+	"RiskPolicySchema partial": {
+		"success": true,
+		"output": "{\"sandbox_only\":false,\"requires_approval\":true,\"network_denied\":true,\"secrets_denied\":true}"
+	},
+	"ConstraintsSchema empty": {
+		"success": true,
+		"output": "{\"metric_floors\":{},\"metric_ceilings\":{}}"
+	},
+	"BudgetSchema empty": {
+		"success": true,
+		"output": "{}"
+	},
+	"BudgetSchema negative time": {
+		"success": false,
+		"paths": [["max_time_seconds"]]
+	},
+	"RecipeId valid": {
+		"success": true,
+		"output": "\"ml-training\""
+	},
+	"RecipeId invalid": {
+		"success": false,
+		"paths": [[]]
+	},
+	"spec budget omitted": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec budget empty object": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec budget partial": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{\"max_iterations\":3},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec budget explicit undefined": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec risk_policy omitted": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec risk_policy empty object": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec risk_policy partial": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":true,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec risk_policy explicit undefined": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec constraints omitted": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec constraints empty object": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec constraints partial": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{\"accuracy\":0.1},\"metric_ceilings\":{}}}"
+	},
+	"spec constraints explicit undefined": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec budget.max_iterations MAX_SAFE_INTEGER": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{\"max_iterations\":9007199254740991},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec budget.max_iterations 2**53": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{\"max_iterations\":9007199254740992},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec budget.max_iterations 1e300": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{\"max_iterations\":1e+300},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec budget.max_iterations fraction": {
+		"success": false,
+		"paths": [["budget", "max_iterations"]]
+	},
+	"spec budget.max_iterations negative": {
+		"success": false,
+		"paths": [["budget", "max_iterations"]]
+	},
+	"spec budget.max_tokens MAX_SAFE_INTEGER": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{\"max_tokens\":9007199254740991},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec budget.max_tokens 2**53": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{\"max_tokens\":9007199254740992},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec budget.max_tokens 1e300": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{\"max_tokens\":1e+300},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{},\"metric_ceilings\":{}}}"
+	},
+	"spec budget.max_tokens fraction": {
+		"success": false,
+		"paths": [["budget", "max_tokens"]]
+	},
+	"spec budget.max_tokens negative": {
+		"success": false,
+		"paths": [["budget", "max_tokens"]]
+	},
+	"BudgetSchema max_iterations MAX_SAFE_INTEGER": {
+		"success": true,
+		"output": "{\"max_iterations\":9007199254740991}"
+	},
+	"BudgetSchema max_iterations 2**53": {
+		"success": true,
+		"output": "{\"max_iterations\":9007199254740992}"
+	},
+	"BudgetSchema max_iterations 1e300": {
+		"success": true,
+		"output": "{\"max_iterations\":1e+300}"
+	},
+	"BudgetSchema max_tokens MAX_SAFE_INTEGER": {
+		"success": true,
+		"output": "{\"max_tokens\":9007199254740991}"
+	},
+	"BudgetSchema max_tokens 2**53": {
+		"success": true,
+		"output": "{\"max_tokens\":9007199254740992}"
+	},
+	"BudgetSchema max_tokens 1e300": {
+		"success": true,
+		"output": "{\"max_tokens\":1e+300}"
+	},
+	"spec budget.max_iterations NaN": {
+		"success": false,
+		"paths": [["budget", "max_iterations"]]
+	},
+	"spec budget.max_time_seconds NaN": {
+		"success": false,
+		"paths": [["budget", "max_time_seconds"]]
+	},
+	"spec budget.max_dollars NaN": {
+		"success": false,
+		"paths": [["budget", "max_dollars"]]
+	},
+	"spec constraints floor NaN": {
+		"success": false,
+		"paths": [["constraints", "metric_floors", "m"]]
+	},
+	"catalog experiments_per_hour NaN": {
+		"success": false,
+		"paths": [["experiments_per_hour"]]
+	},
+	"spec budget.max_iterations Infinity": {
+		"success": false,
+		"paths": [["budget", "max_iterations"], ["budget", "max_iterations"]]
+	},
+	"spec budget.max_time_seconds Infinity": {
+		"success": false,
+		"paths": [["budget", "max_time_seconds"]]
+	},
+	"spec budget.max_dollars Infinity": {
+		"success": false,
+		"paths": [["budget", "max_dollars"]]
+	},
+	"spec constraints floor Infinity": {
+		"success": false,
+		"paths": [["constraints", "metric_floors", "m"]]
+	},
+	"catalog experiments_per_hour Infinity": {
+		"success": false,
+		"paths": [["experiments_per_hour"]]
+	},
+	"spec budget.max_iterations -Infinity": {
+		"success": false,
+		"paths": [
+			["budget", "max_iterations"],
+			["budget", "max_iterations"],
+			["budget", "max_iterations"]
+		]
+	},
+	"spec budget.max_time_seconds -Infinity": {
+		"success": false,
+		"paths": [["budget", "max_time_seconds"], ["budget", "max_time_seconds"]]
+	},
+	"spec budget.max_dollars -Infinity": {
+		"success": false,
+		"paths": [["budget", "max_dollars"], ["budget", "max_dollars"]]
+	},
+	"spec constraints floor -Infinity": {
+		"success": false,
+		"paths": [["constraints", "metric_floors", "m"]]
+	},
+	"catalog experiments_per_hour -Infinity": {
+		"success": false,
+		"paths": [["experiments_per_hour"], ["experiments_per_hour"]]
+	},
+	"spec constraints floor above ceiling": {
+		"success": false,
+		"paths": [["constraints", "metric_floors", "accuracy"]]
+	},
+	"spec constraints two floors above ceilings": {
+		"success": false,
+		"paths": [
+			["constraints", "metric_floors", "a"],
+			["constraints", "metric_floors", "b"]
+		]
+	},
+	"spec constraints floor equals ceiling": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{\"a\":1},\"metric_ceilings\":{\"a\":1}}}"
+	},
+	"spec constraints floor without ceiling": {
+		"success": true,
+		"output": "{\"target_artifact\":\"prompt.md\",\"artifact_type\":\"other\",\"mutation_strategy\":\"LLM edit\",\"evaluator_command\":\"bun eval.ts\",\"metric_name\":\"score\",\"metric_direction\":\"maximize\",\"acceptance_rule\":\"strict-improvement\",\"budget\":{},\"environment\":{},\"stopping_conditions\":[\"budget-exhaustion\"],\"risk_policy\":{\"sandbox_only\":false,\"requires_approval\":false,\"network_denied\":true,\"secrets_denied\":true},\"constraints\":{\"metric_floors\":{\"a\":5},\"metric_ceilings\":{}}}"
+	},
+	"ConstraintsSchema floor above ceiling": {
+		"success": false,
+		"paths": [["metric_floors", "a"]]
+	},
+	"ConstraintsSchema invalid floor type and refine": {
+		"success": false,
+		"paths": [["metric_floors", "a"]]
+	},
+	"catalog arrays omitted": {
+		"success": true,
+		"output": "{\"id\":\"hill-climbing\",\"name\":\"Hill Climbing\",\"layer\":\"strategy\",\"description\":\"d\",\"when_to_use\":\"w\",\"tags\":[],\"related\":[],\"examples\":[],\"requires_gpu\":false}"
+	},
+	"catalog arrays present": {
+		"success": true,
+		"output": "{\"id\":\"hill-climbing\",\"name\":\"Hill Climbing\",\"layer\":\"strategy\",\"description\":\"d\",\"when_to_use\":\"w\",\"when_not_to_use\":\"n\",\"core_pattern\":\"c\",\"source\":\"s\",\"tags\":[\"a\",\"b\"],\"related\":[\"x\"],\"examples\":[{\"domain\":\"d\",\"description\":\"e\",\"metric\":\"m\",\"result\":\"r\"}],\"composes\":{\"search_strategy\":\"hill-climbing\"},\"estimated_cost\":\"low\",\"experiments_per_hour\":12,\"requires_gpu\":true}"
+	},
+	"catalog arrays empty": {
+		"success": true,
+		"output": "{\"id\":\"hill-climbing\",\"name\":\"Hill Climbing\",\"layer\":\"strategy\",\"description\":\"d\",\"when_to_use\":\"w\",\"tags\":[],\"related\":[],\"examples\":[],\"requires_gpu\":false}"
+	},
+	"catalog invalid layer and example": {
+		"success": false,
+		"paths": [
+			["layer"],
+			["examples", 0, "domain"],
+			["examples", 0, "description"]
+		]
+	},
+	"catalog nonpositive experiments_per_hour": {
+		"success": false,
+		"paths": [["experiments_per_hour"]]
+	},
+	"catalog unknown key": {
+		"success": true,
+		"output": "{\"id\":\"hill-climbing\",\"name\":\"Hill Climbing\",\"layer\":\"strategy\",\"description\":\"d\",\"when_to_use\":\"w\",\"tags\":[],\"related\":[],\"examples\":[],\"requires_gpu\":false}"
+	},
+	"technique minimal": {
+		"success": true,
+		"output": "{\"search_strategy\":\"hill-climbing\",\"evaluator\":\"binary-evaluator\",\"execution_pattern\":\"single-ratchet\"}"
+	},
+	"technique with domain template": {
+		"success": true,
+		"output": "{\"search_strategy\":\"beam-search\",\"evaluator\":\"llm-as-judge\",\"execution_pattern\":\"bounded-episode\",\"domain_template\":\"prompt-optimization\"}"
+	},
+	"technique invalid": {
+		"success": false,
+		"paths": [["search_strategy"], ["evaluator"], ["execution_pattern"]]
+	}
+}

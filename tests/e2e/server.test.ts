@@ -273,7 +273,8 @@ describe("MCP Server E2E", () => {
 			"Input validation error: Invalid arguments for tool list_experiments",
 		);
 		expect(result.content[0].text).toContain("status");
-		expect(result.content[0].text).toContain("not-a-status");
+		// zod 4 names the allowed options instead of echoing the rejected value.
+		expect(result.content[0].text).toContain('expected one of "scaffolded"');
 
 		child.stdin?.write(
 			`${JSON.stringify({
