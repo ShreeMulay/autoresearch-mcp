@@ -428,6 +428,154 @@ describe("concurrent migration initialization", () => {
 			await rm(dir, { force: true, recursive: true });
 		}
 	});
+
+	it("allows four processes to open and migrate the same new database", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "autoresearch-migration-race4-"));
+		const dbPath = join(dir, "shared.db");
+		const schemaUrl = new URL(
+			resolve(import.meta.dir, "../../src/db/schema.ts"),
+			"file://",
+		).href;
+		const script = `import { getDb, resetDb } from ${JSON.stringify(schemaUrl)}; resetDb(process.env.TEST_DB); getDb();`;
+		try {
+			const processes = [0, 1, 2, 3].map(() =>
+				Bun.spawn(["bun", "--eval", script], {
+					env: { ...process.env, TEST_DB: dbPath },
+					stderr: "pipe",
+					stdout: "pipe",
+				}),
+			);
+			const results = await Promise.all(
+				processes.map(async (process) => ({
+					exitCode: await process.exited,
+					stderr: await new Response(process.stderr).text(),
+				})),
+			);
+			expect(results).toEqual(
+				Array.from({ length: 4 }, () => ({ exitCode: 0, stderr: "" })),
+			);
+
+			const db = new Database(dbPath);
+			try {
+				expect(
+					(
+						db.prepare("PRAGMA journal_mode").get() as {
+							journal_mode: string;
+						}
+					).journal_mode.toLowerCase(),
+				).toBe("wal");
+				const versions = db
+					.prepare("SELECT version FROM _migrations ORDER BY version")
+					.all() as { version: number }[];
+				expect(versions.length).toBeGreaterThanOrEqual(1);
+				expect(new Set(versions.map((row) => row.version)).size).toBe(
+					versions.length,
+				);
+				expect(
+					(
+						db
+							.prepare(
+								"SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'experiments'",
+							)
+							.get() as { count: number }
+					).count,
+				).toBe(1);
+			} finally {
+				db.close();
+			}
+		} finally {
+			await rm(dir, { force: true, recursive: true });
+		}
+	});
+});
+
+describe("locked database open", () => {
+	const lockWaitEnv = "AUTORESEARCH_DB_LOCK_WAIT_MS";
+
+	async function withHeldLock(
+		run: (dbPath: string, release: () => void) => void,
+	): Promise<void> {
+		const dir = await mkdtemp(join(tmpdir(), "autoresearch-locked-"));
+		const dbPath = join(dir, "locked.db");
+		const hadPrevious = Object.hasOwn(process.env, lockWaitEnv);
+		const previous = process.env[lockWaitEnv];
+		process.env[lockWaitEnv] = "50";
+		// A rollback-journal database with an open write transaction: readers
+		// may proceed, but switching to WAL fails with SQLITE_BUSY.
+		const holder = new Database(dbPath, { create: true });
+		holder.exec("CREATE TABLE holder_marker (x INTEGER)");
+		holder.exec("BEGIN IMMEDIATE");
+		holder.exec("INSERT INTO holder_marker VALUES (1)");
+		let held = true;
+		const release = () => {
+			if (held) {
+				holder.exec("COMMIT");
+				held = false;
+			}
+		};
+		try {
+			resetDb(dbPath);
+			run(dbPath, release);
+		} finally {
+			release();
+			holder.close();
+			if (hadPrevious) {
+				process.env[lockWaitEnv] = previous;
+			} else {
+				Reflect.deleteProperty(process.env, lockWaitEnv);
+			}
+			closeDb();
+			resetDb(":memory:");
+			await rm(dir, { force: true, recursive: true });
+		}
+	}
+
+	it("reports a clear error naming the path when another process holds the lock", async () => {
+		await withHeldLock((dbPath) => {
+			const started = Date.now();
+			let thrown: unknown;
+			try {
+				getDb();
+			} catch (error) {
+				thrown = error;
+			}
+			expect(thrown).toBeInstanceOf(Error);
+			const message = (thrown as Error).message;
+			expect(message).toContain(dbPath);
+			expect(message).toMatch(/another process holds the lock/);
+			expect(Date.now() - started).toBeLessThan(2000);
+		});
+	});
+
+	it("does not cache a handle after a failed open, and retries on the next call", async () => {
+		await withHeldLock((_dbPath, release) => {
+			expect(() => getDb()).toThrow(/another process holds the lock/);
+
+			release();
+			const db = getDb();
+			expect(
+				(
+					db.prepare("PRAGMA journal_mode").get() as { journal_mode: string }
+				).journal_mode.toLowerCase(),
+			).toBe("wal");
+			expect(
+				(db.prepare("PRAGMA foreign_keys").get() as { foreign_keys: number })
+					.foreign_keys,
+			).toBe(1);
+			const migrations = db
+				.prepare("SELECT version, name FROM _migrations ORDER BY version")
+				.all() as { version: number; name: string }[];
+			expect(migrations[0]).toEqual({ version: 1, name: "initial_schema" });
+			expect(
+				db
+					.prepare(
+						"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'experiments'",
+					)
+					.get(),
+			).toEqual({ name: "experiments" });
+			expect(getDb()).toBe(db);
+		});
+	});
 });
 
 describe("populated pre-v3 migration", () => {

@@ -70,6 +70,10 @@ Planned first npm release. Versions 0.1.0 through 0.3.0 were never published to 
 
 - **`log_technique_outcome`** — removed the callable tool, database write API, public type, and active documentation because no read path used the records to improve suggestions. New databases omit the table; existing databases remain compatible because startup does not destructively drop an inert historical table.
 
+### Fixed
+
+- **Concurrent first start** — two servers starting at once on a new database no longer fail with "database is locked", and a failed database open no longer leaves a half-initialised connection behind.
+
 ## [0.3.0] - 2026-05-07
 
 ### Security
