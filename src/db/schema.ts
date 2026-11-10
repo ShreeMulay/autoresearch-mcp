@@ -391,15 +391,98 @@ export function getActiveDbPath(): string {
 
 export function getDb(): Database {
 	if (!_db) {
-		ensureDbParent(_dbPath);
-		_db = new Database(_dbPath, { create: true });
-		_db.exec("PRAGMA busy_timeout = 5000");
-		_db.exec("PRAGMA journal_mode = WAL");
-		_db.exec("PRAGMA foreign_keys = ON");
-		runMigrations(_db);
+		const dbPath = _dbPath;
+		ensureDbParent(dbPath);
+		const db = new Database(dbPath, { create: true });
+		try {
+			db.exec("PRAGMA busy_timeout = 5000");
+			enableWalJournal(db, dbPath);
+			db.exec("PRAGMA foreign_keys = ON");
+			runMigrations(db);
+		} catch (error) {
+			try {
+				db.close();
+			} catch {
+				// Ignore close failures; the original error is more useful.
+			}
+			throw error;
+		}
+		// Publish the handle only once it is fully configured and migrated.
+		_db = db;
 	}
 
 	return _db;
+}
+
+const DEFAULT_JOURNAL_LOCK_WAIT_MS = 5000;
+const MAX_JOURNAL_RETRY_DELAY_MS = 200;
+
+/**
+ * Total time to keep retrying the WAL switch while another connection holds
+ * the database lock. `AUTORESEARCH_DB_LOCK_WAIT_MS` is a test-only seam.
+ */
+function getJournalLockWaitMs(): number {
+	const configured = Number(process.env.AUTORESEARCH_DB_LOCK_WAIT_MS);
+	return Number.isFinite(configured) && configured >= 0
+		? configured
+		: DEFAULT_JOURNAL_LOCK_WAIT_MS;
+}
+
+function isSqliteBusy(error: unknown): boolean {
+	const code = (error as { code?: unknown } | null)?.code;
+	return (
+		typeof code === "string" &&
+		(code === "SQLITE_BUSY" || code.startsWith("SQLITE_BUSY_"))
+	);
+}
+
+function readJournalMode(db: Database): string {
+	const row = db.prepare("PRAGMA journal_mode").get() as {
+		journal_mode: string;
+	} | null;
+	return String(row?.journal_mode ?? "").toLowerCase();
+}
+
+/**
+ * Switch a file database to WAL. SQLite does not apply the busy handler to
+ * this switch, so a concurrent opener can get SQLITE_BUSY immediately; retry
+ * with a bounded backoff, re-reading the mode in case the other process has
+ * already completed the switch.
+ */
+function enableWalJournal(db: Database, dbPath: string): void {
+	const deadline = Date.now() + getJournalLockWaitMs();
+	let delayMs = 10;
+
+	for (;;) {
+		try {
+			const current = readJournalMode(db);
+			if (current === "wal" || current === "memory") {
+				// In-memory databases report "memory" and cannot use WAL.
+				return;
+			}
+			db.exec("PRAGMA journal_mode = WAL");
+			const after = readJournalMode(db);
+			if (after !== "wal") {
+				throw new Error(
+					`Could not enable WAL journal mode for database at ${dbPath} (journal_mode is "${after}")`,
+				);
+			}
+			return;
+		} catch (error) {
+			if (!isSqliteBusy(error)) {
+				throw error;
+			}
+			const remainingMs = deadline - Date.now();
+			if (remainingMs <= 0) {
+				throw new Error(
+					`Could not open database at ${dbPath}: another process holds the lock (timed out enabling WAL journal mode)`,
+					{ cause: error },
+				);
+			}
+			Bun.sleepSync(Math.min(delayMs, remainingMs));
+			delayMs = Math.min(delayMs * 2, MAX_JOURNAL_RETRY_DELAY_MS);
+		}
+	}
 }
 
 /**
