@@ -2,7 +2,10 @@
 /**
  * Explicit skill installation CLI for autoresearch-mcp.
  *
- * Usage:
+ * Usage (from a source checkout; works today):
+ *   node /absolute/path/to/autoresearch-mcp/bin/autoresearch-install-skill [--target <platform>] [--dry-run]
+ *
+ * After npm publication only (autoresearch-mcp is not yet on npm):
  *   npx -p autoresearch-mcp autoresearch-install-skill [--target <platform>] [--dry-run]
  *   autoresearch-mcp install-skill [--target <platform>] [--dry-run]
  *
@@ -39,6 +42,9 @@ const __dirname = dirname(__filename);
 const skillSrc = resolve(__dirname, "../skills/autoresearch");
 
 const USAGE = `Usage:
+  node /absolute/path/to/autoresearch-mcp/bin/autoresearch-install-skill [--target <platform>] [--dry-run]
+
+After npm publication only (autoresearch-mcp is not yet on npm):
   npx -p autoresearch-mcp autoresearch-install-skill [--target <platform>] [--dry-run]
   autoresearch-mcp install-skill [--target <platform>] [--dry-run]
 
